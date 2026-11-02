@@ -89,6 +89,10 @@ def prepare(source):
         raise RuntimeError('Pinned Cua MIT notice differs from shipped notice')
 
 
+def reviewed_patches():
+    return [*PIN.get('backports', []), *PIN.get('local_fixes', [])]
+
+
 def apply_backports():
     """Apply reviewed MIT source changes only to the owned, clean export.
 
@@ -96,7 +100,7 @@ def apply_backports():
     partial application fails instead of silently changing packaged behavior.
     """
     records = []
-    for backport in PIN.get('backports', []):
+    for backport in reviewed_patches():
         patch = (RUNTIME / backport['patch']).resolve()
         if not patch.is_relative_to((RUNTIME / 'patches').resolve()):
             raise RuntimeError('Backport patch is outside the reviewed patch directory')
@@ -137,7 +141,9 @@ def apply_backports():
                 dest = CACHE / entry['file']
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(export / entry['file'], dest)
-                records.append({**entry, 'reason': backport['reason'], 'upstream_revision': backport['revision']})
+                origin = ({'upstream_revision': backport['revision']} if 'revision' in backport
+                          else {'local_fix': backport['id'], 'source_url': backport['source_url']})
+                records.append({**entry, 'reason': backport['reason'], **origin})
     return records
 
 
@@ -157,7 +163,7 @@ def notices(target):
     shutil.copytree(RUNTIME / 'licenses', folder)
     shutil.copy2(CACHE / 'reasonix-source-patches.json', folder / 'reasonix-source-patches.json')
     shutil.copy2(CACHE / 'reasonix-source.json', folder / 'reasonix-source.json')
-    for backport in PIN.get('backports', []):
+    for backport in reviewed_patches():
         dest = folder / backport['patch']
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(RUNTIME / backport['patch'], dest)

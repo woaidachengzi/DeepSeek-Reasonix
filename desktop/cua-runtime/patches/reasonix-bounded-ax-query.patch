@@ -1,0 +1,583 @@
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/walk_budget.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/walk_budget.rs
+--- a/libs/cua-driver/rust/crates/cua-driver-core/src/walk_budget.rs
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/walk_budget.rs
+@@ -20,6 +20,8 @@
+     /// accessibility API before `timeout_ms` ran out (still launching, or not
+     /// yet registered), so nothing was walked.
+     AppLookupTimeout,
++    /// A raw recursion ceiling stopped a deeply nested or cyclic AX tree.
++    DepthBudget,
+ }
+ 
+ impl WalkStop {
+@@ -28,6 +30,7 @@
+             WalkStop::Timeout => "timeout",
+             WalkStop::NodeBudget => "node_budget",
+             WalkStop::AppLookupTimeout => "app_lookup_timeout",
++            WalkStop::DepthBudget => "depth_budget",
+         }
+     }
+ }
+@@ -106,6 +109,28 @@
+         true
+     }
+ 
++    /// The requested row/node limit before a query separates scan and output budgets.
++    pub fn node_limit(&self) -> usize {
++        self.max_elements
++    }
++
++    /// Set a bounded raw scan limit before admitting the first node.
++    pub fn set_node_limit(&mut self, limit: usize) {
++        assert!(
++            self.started.is_none(),
++            "cannot change an active walk budget"
++        );
++        self.max_elements = limit;
++    }
++
++    pub fn stop_for_node_budget(&mut self) {
++        self.stop.get_or_insert(WalkStop::NodeBudget);
++    }
++
++    pub fn stop_for_depth_budget(&mut self) {
++        self.stop.get_or_insert(WalkStop::DepthBudget);
++    }
++
+     /// Whether the wall-clock budget has run out (for phases that cannot be
+     /// interrupted per node). Never true before the walk has started.
+     pub fn expired(&self) -> bool {
+@@ -203,7 +228,8 @@
+ ) -> String {
+     let why = match reason {
+         Some("timeout") => format!("the {timeout_ms} ms timeout_ms budget ran out"),
+-        Some("node_budget") => "the max_elements node budget ran out".to_owned(),
++        Some("node_budget") => "the bounded scan or max_elements row budget ran out".to_owned(),
++        Some("depth_budget") => "the raw accessibility recursion ceiling was reached".to_owned(),
+         Some("app_unresponsive") => {
+             "the application stopped answering its accessibility API".to_owned()
+         }
+diff --git a/libs/cua-driver/rust/crates/cua-driver-core/src/snapshot_store.rs b/libs/cua-driver/rust/crates/cua-driver-core/src/snapshot_store.rs
+--- a/libs/cua-driver/rust/crates/cua-driver-core/src/snapshot_store.rs
++++ b/libs/cua-driver/rust/crates/cua-driver-core/src/snapshot_store.rs
+@@ -327,15 +327,16 @@
+ fn out_of_range_refusal<S: SnapshotPayload>(snapshot: &Snapshot<S>, row: usize) -> ToolResult {
+     let snapshot_id = format_snapshot_id(snapshot.id);
+     let rows = match snapshot.payload.len() {
+-        0 => "no rows".to_owned(),
+-        n => format!("rows [0] to [{}] only", n - 1),
++        0 => "no row slots".to_owned(),
++        n => format!("row slots [0] to [{}] only", n - 1),
+     };
+     refusal(
+         "invalid_element_token",
+         format!(
+-            "element_token {snapshot_id}:{row} is out of range: snapshot {snapshot_id} has \
+-             {rows} ({} element(s)). Row numbers belong to one read: a read with a smaller \
+-             max_elements, max_depth or another query can stop before row [{row}]. Use a row \
++            "element_token {snapshot_id}:{row} is unavailable: snapshot {snapshot_id} has \
++             {rows} ({} slot(s)); filtered reads can leave gaps. Row numbers belong to one \
++             read: a read with a smaller max_elements, max_depth or another query can omit \
++             row [{row}]. Use a row \
+              printed in {snapshot_id}, or re-read with a larger max_elements (or a query that \
+              matches the target) and use that read's rows.",
+             snapshot.payload.len()
+@@ -1776,7 +1777,7 @@
+             .unwrap_err();
+         let text = crate::snapshot_test_support::text(&refused);
+         assert!(
+-            text.contains("rows [0] to [43] only (44 element(s))"),
++            text.contains("row slots [0] to [43] only (44 slot(s))"),
+             "{text}"
+         );
+         assert!(text.contains("smaller max_elements"), "{text}");
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs b/libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs
+@@ -17,6 +17,10 @@
+ use core_foundation::base::{CFEqual, CFRelease, CFRetain, CFTypeRef};
+ use cua_driver_core::walk_budget::{WalkBudget, WalkOutcome};
+ use std::time::Instant;
++
++#[path = "tree_query.rs"]
++mod tree_query;
++use tree_query::{QueryScan, MAX_RAW_DEPTH};
+ 
+ /// Default maximum depth for AX tree walks. Deep menus and complex web views
+ /// can nest deeply; 25 covers realistic app chrome without exploding on
+@@ -238,6 +242,7 @@
+     mut budget: WalkBudget,
+     include_web_content: bool,
+ ) -> TreeWalkResult {
++    let mut query_scan = QueryScan::new(query, &mut budget);
+     let mut nodes: Vec<AXNode> = Vec::new();
+     let mut lines: Vec<(usize, String)> = Vec::new(); // (depth, line)
+     let mut index_counter = 0usize;
+@@ -316,6 +321,7 @@
+             walk_element(
+                 child,
+                 0,
++                0,
+                 None,
+                 false,
+                 &mut nodes,
+@@ -324,6 +330,7 @@
+                 &mut budget,
+                 max_depth,
+                 include_web_content,
++                &mut query_scan,
+             );
+         }
+ 
+@@ -334,6 +341,31 @@
+     }
+ 
+     let walk = budget.outcome();
++    if let Some(scan) = &query_scan {
++        nodes = nodes
++            .into_iter()
++            .enumerate()
++            .filter_map(|(row, node)| {
++                if scan.retains(row) {
++                    Some(node)
++                } else {
++                    // Actionable rows were retained for the eventual snapshot.
++                    // A query must release every row it does not publish.
++                    if node.element_index.is_some() {
++                        unsafe {
++                            CFRelease(node.element_ptr as CFTypeRef);
++                        }
++                    }
++                    None
++                }
++            })
++            .collect();
++        lines = lines
++            .into_iter()
++            .enumerate()
++            .filter_map(|(row, line)| scan.retains(row).then_some(line))
++            .collect();
++    }
+     prune_echo_text_rows(&mut lines);
+     let raw_markdown = render_lines(&lines);
+     let mut tree_markdown = if let Some(q) = query {
+@@ -432,6 +464,7 @@
+ unsafe fn walk_element(
+     element: AXUIElementRef,
+     depth: usize,
++    raw_depth: usize,
+     parent_index: Option<usize>,
+     in_web_content: bool,
+     nodes: &mut Vec<AXNode>,
+@@ -440,13 +473,22 @@
+     budget: &mut WalkBudget,
+     max_depth: usize,
+     include_web_content: bool,
++    query_scan: &mut Option<QueryScan>,
+ ) {
++    if raw_depth > MAX_RAW_DEPTH {
++        budget.stop_for_depth_budget();
++        return;
++    }
+     if depth > max_depth {
+         return;
+     }
+     // Node and time budget: a refused node is counted as discovered but not
+     // visited, and the walk unwinds with the partial tree it has.
+-    if !budget.admit() {
++    let admitted = match query_scan.as_ref() {
++        Some(scan) => scan.admit(budget),
++        None => budget.admit(),
++    };
++    if !admitted {
+         return;
+     }
+ 
+@@ -471,6 +513,7 @@
+             walk_element(
+                 child,
+                 depth,
++                raw_depth + 1,
+                 parent_index,
+                 in_web_content,
+                 nodes,
+@@ -479,6 +522,7 @@
+                 budget,
+                 max_depth,
+                 include_web_content,
++                query_scan,
+             );
+             CFRelease(child as CFTypeRef);
+         }
+@@ -537,7 +581,8 @@
+         for child in children {
+             walk_element(
+                 child,
+-                depth + 1,
++                depth,
++                raw_depth + 1,
+                 parent_index,
+                 in_web_content,
+                 nodes,
+@@ -546,6 +591,7 @@
+                 budget,
+                 max_depth,
+                 include_web_content,
++                query_scan,
+             );
+             CFRelease(child as CFTypeRef);
+         }
+@@ -663,6 +709,9 @@
+     } else {
+         format_node_line(&node)
+     };
++    if let Some(scan) = query_scan {
++        scan.record(depth, lines.len(), &line);
++    }
+     lines.push((depth, line));
+     nodes.push(node);
+     if collapse_here {
+@@ -674,6 +723,7 @@
+         walk_element(
+             child,
+             depth + 1,
++            raw_depth + 1,
+             next_parent,
+             in_web_content,
+             nodes,
+@@ -682,6 +732,7 @@
+             budget,
+             max_depth,
+             include_web_content,
++            query_scan,
+         );
+         CFRelease(child as CFTypeRef);
+     }
+@@ -857,7 +908,8 @@
+ 
+ /// Filter the tree markdown to lines matching `query` plus their ancestor chain.
+ fn filter_tree(markdown: &str, query: &str) -> String {
+-    let needle = query.to_lowercase();
++    // Keep final rendering consistent with the in-walk match budget.
++    let needle = query.trim().to_lowercase();
+     let lines: Vec<&str> = markdown.lines().collect();
+ 
+     let mut current_ancestor: Vec<&str> = Vec::new();
+@@ -917,6 +969,16 @@
+ mod tests {
+     use super::*;
+     use std::cell::Cell;
++
++    #[test]
++    fn final_query_filter_uses_the_walks_trimmed_case_insensitive_needle() {
++        let markdown = "window\n  [7] Apply changes\n";
++        assert_eq!(
++            filter_tree(markdown, " Apply "),
++            filter_tree(markdown, "apply")
++        );
++        assert_eq!(filter_tree(markdown, " Apply "), markdown);
++    }
+ 
+     #[test]
+     fn writable_value_controls_are_addressable_without_actions() {
+@@ -1027,3 +1089,42 @@
+         assert_eq!(echo_text_of("- [2] AXStaticText = \"\""), None);
+     }
+ }
++
++#[cfg(test)]
++mod depth_budget_tests {
++    use super::*;
++
++    #[test]
++    fn raw_depth_ceiling_refuses_before_any_native_access() {
++        let mut budget = WalkBudget::nodes_only(2000);
++        let mut nodes = Vec::new();
++        let mut lines = Vec::new();
++        let mut counter = 0;
++        // A null AX pointer is safe here only if the recursion guard runs
++        // before any attribute request. Cyclic layout wrappers must not
++        // bypass this guard by keeping their semantic depth at zero.
++        unsafe {
++            walk_element(
++                std::ptr::null_mut(),
++                0,
++                MAX_RAW_DEPTH + 1,
++                None,
++                false,
++                &mut nodes,
++                &mut lines,
++                &mut counter,
++                &mut budget,
++                DEFAULT_MAX_DEPTH,
++                true,
++                &mut None,
++            );
++        }
++        assert!(nodes.is_empty());
++        assert_eq!(budget.outcome().reason(), Some("depth_budget"));
++        assert!(budget
++            .outcome()
++            .note()
++            .unwrap()
++            .contains("recursion ceiling"));
++    }
++}
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/ax/tree_query.rs b/libs/cua-driver/rust/crates/platform-macos/src/ax/tree_query.rs
+new file mode 100644
+--- /dev/null
++++ b/libs/cua-driver/rust/crates/platform-macos/src/ax/tree_query.rs
+@@ -0,0 +1,127 @@
++//! Query walks spend separate budgets on raw visits and returned rows.
++use cua_driver_core::walk_budget::WalkBudget;
++use std::collections::BTreeSet;
++
++pub(super) const MAX_QUERY_VISITS: usize = 20_000;
++pub(super) const MAX_RAW_DEPTH: usize = 128;
++
++pub(super) struct QueryScan {
++    needle: String,
++    limit: usize,
++    ancestors: Vec<(usize, usize)>,
++    retained: BTreeSet<usize>,
++    full: bool,
++}
++
++impl QueryScan {
++    pub(super) fn new(query: Option<&str>, budget: &mut WalkBudget) -> Option<Self> {
++        let needle = query?.trim().to_lowercase();
++        if needle.is_empty() {
++            return None;
++        }
++        let limit = budget.node_limit().min(MAX_QUERY_VISITS);
++        budget.set_node_limit(MAX_QUERY_VISITS);
++        Some(Self {
++            needle,
++            limit,
++            ancestors: Vec::new(),
++            retained: BTreeSet::new(),
++            full: limit == 0,
++        })
++    }
++
++    pub(super) fn admit(&self, budget: &mut WalkBudget) -> bool {
++        if self.full {
++            budget.stop_for_node_budget();
++        }
++        budget.admit()
++    }
++
++    // Row positions refer to the unfiltered walk, preserving element tokens.
++    // Ancestors count towards the output bound too, not only matching rows.
++    pub(super) fn record(&mut self, depth: usize, row: usize, text: &str) {
++        self.ancestors.retain(|(d, _)| *d < depth);
++        self.ancestors.push((depth, row));
++        if !text.to_lowercase().contains(&self.needle) {
++            return;
++        }
++        let added = self
++            .ancestors
++            .iter()
++            .filter(|(_, position)| !self.retained.contains(position))
++            .count();
++        if self.retained.len() + added > self.limit {
++            self.full = true;
++            return;
++        }
++        self.retained.extend(self.ancestors.iter().map(|(_, i)| *i));
++        self.full = self.retained.len() == self.limit;
++    }
++
++    pub(super) fn retains(&self, row: usize) -> bool {
++        self.retained.contains(&row)
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn query_finds_a_footer_after_thousands_of_unmatched_rows() {
++        let mut budget = WalkBudget::nodes_only(3);
++        let mut query = QueryScan::new(Some("Apply"), &mut budget).unwrap();
++        assert!(query.admit(&mut budget));
++        query.record(0, 0, "window");
++        for row in 1..=3000 {
++            assert!(query.admit(&mut budget));
++            query.record(1, row, "telemetry row");
++        }
++        assert!(query.admit(&mut budget));
++        query.record(1, 3001, "Apply changes");
++        assert!(query.retains(0));
++        assert!(query.retains(3001));
++        assert!(!query.retains(1));
++        assert!(!budget.outcome().truncated());
++    }
++
++    #[test]
++    fn ancestors_share_the_output_budget_and_indices_are_not_renumbered() {
++        let mut budget = WalkBudget::nodes_only(3);
++        let mut query = QueryScan::new(Some("Apply"), &mut budget).unwrap();
++        for (row, depth, text) in [
++            (0, 0, "window"),
++            (1, 1, "pane"),
++            (2, 2, "ignored"),
++            (3, 2, "Apply"),
++        ] {
++            assert!(query.admit(&mut budget));
++            query.record(depth, row, text);
++        }
++        assert_eq!(query.retained, BTreeSet::from([0, 1, 3]));
++        assert!(!query.admit(&mut budget));
++        assert_eq!(budget.outcome().reason(), Some("node_budget"));
++    }
++
++    #[test]
++    fn a_query_without_matches_still_has_a_raw_visit_ceiling() {
++        let mut budget = WalkBudget::nodes_only(10);
++        let query = QueryScan::new(Some("missing"), &mut budget).unwrap();
++        for _ in 0..MAX_QUERY_VISITS {
++            assert!(query.admit(&mut budget));
++        }
++        assert!(!query.admit(&mut budget));
++        assert_eq!(budget.outcome().nodes_visited, MAX_QUERY_VISITS);
++    }
++
++    #[test]
++    fn query_keeps_the_clock_and_blank_queries_keep_the_original_budget() {
++        let mut clock = WalkBudget::new(0, 20);
++        let query = QueryScan::new(Some("Apply"), &mut clock).unwrap();
++        assert!(!query.admit(&mut clock));
++        assert_eq!(clock.outcome().reason(), Some("timeout"));
++        let mut blank = WalkBudget::nodes_only(2);
++        assert!(QueryScan::new(Some("  "), &mut blank).is_none());
++        assert_eq!(blank.node_limit(), 2);
++    }
++}
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/ax/snapshot.rs b/libs/cua-driver/rust/crates/platform-macos/src/ax/snapshot.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/ax/snapshot.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/ax/snapshot.rs
+@@ -43,13 +43,20 @@
+ 
+ impl AxSnapshot {
+     pub fn from_nodes(nodes: &[AXNode]) -> Self {
+-        Self {
+-            elements: nodes
+-                .iter()
+-                .filter(|node| node.element_index.is_some())
+-                .map(|node| node.element_ptr)
+-                .collect(),
+-        }
++        // Query output keeps the original DFS indices. Gaps must remain
++        // empty slots, otherwise a token would address a different element.
++        let slots = nodes
++            .iter()
++            .filter_map(|node| node.element_index)
++            .max()
++            .map_or(0, |index| index + 1);
++        let mut elements = vec![0; slots];
++        for node in nodes {
++            if let Some(index) = node.element_index {
++                elements[index] = node.element_ptr;
++            }
++        }
++        Self { elements }
+     }
+ }
+ 
+@@ -61,7 +68,9 @@
+     fn retain(&self, index: usize) -> Option<RetainedElement> {
+         self.elements
+             .get(index)
+-            .map(|ptr| unsafe { RetainedElement::retain(*ptr) })
++            .copied()
++            .filter(|ptr| *ptr != 0)
++            .map(|ptr| unsafe { RetainedElement::retain(ptr) })
+     }
+ }
+ 
+@@ -83,6 +92,47 @@
+     use core_foundation::base::{CFGetRetainCount, TCFType};
+     use core_foundation::string::CFString;
+     use cua_driver_core::element_token::{token_for, ResolvedElement};
++
++    #[test]
++    fn sparse_query_rows_keep_their_original_token_indices() {
++        let label = CFString::new("retained query result");
++        let ptr = label.as_CFTypeRef() as usize;
++        // Ownership normally comes from the tree walk's CFRetain.
++        unsafe { CFRetain(ptr as CFTypeRef) };
++        let node = AXNode {
++            element_index: Some(7),
++            role: "AXButton".into(),
++            title: Some("Apply".into()),
++            value: None,
++            description: None,
++            identifier: None,
++            help: None,
++            actions: vec!["AXPress".into()],
++            element_ptr: ptr,
++            depth: 1,
++            parent_element_index: None,
++            frame: None,
++            value_state: None,
++            value_description: None,
++            min_value: None,
++            max_value: None,
++            enabled: Some(true),
++            selected: None,
++            in_web_content: false,
++        };
++        let payload = AxSnapshot::from_nodes(&[node]);
++        assert!(
++            payload.retain(0).is_none(),
++            "an omitted row must never retarget"
++        );
++        assert!(payload.retain(6).is_none());
++        assert!(payload.retain(7).is_some());
++        assert!(payload.retain(8).is_none());
++        let store = Snapshots::new();
++        let snapshot = store.publish(1, 2, payload);
++        assert!(resolve(&store, snapshot, 0).is_none());
++        assert!(resolve(&store, snapshot, 7).is_some());
++    }
+ 
+     fn resolve(cache: &Snapshots, snapshot: u32, index: usize) -> Option<RetainedElement> {
+         match cache
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs
+@@ -29,7 +29,7 @@
+         name: "get_window_state".into(),
+         description: "Snapshot a window: the accessibility tree plus a screenshot. By default the tree is ONE compact Markdown rendering (`tree_format:\"markdown\"`): a row `[N]` is addressed with `element_token` `<snapshot_id>:N`, where `snapshot_id` is in the response header and in structuredContent. `tree_format:\"elements\"` returns the structured `elements` array instead (`element_index`, `element_token`, `role`, `label`, `value`, `actions`, `frame`, `parent_index`, `depth`); `\"both\"` returns both (about twice the size). Pass the token to click, type_text, press_key, etc.\n\
+             \n\
+-            START NARROW: a read walks at most 250 nodes by default and says `Tree truncated at max_elements=…` (`truncated:true`) when it stops; raise `max_elements`, or use `query` (case-insensitive substring; matching rows plus ancestors) and `max_depth`. Indices and tokens stay valid for the whole snapshot. `verbose:true` adds `_note` and the full `background_input` report; `full_output:true` restores the previous full response (both representations, all metadata, ≤2 000 nodes).\n\
++            START NARROW: a read walks at most 250 nodes by default and says `Tree truncated at max_elements=…` (`truncated:true`) when it stops; raise `max_elements`, or use `query` (case-insensitive substring; matching rows plus ancestors) and `max_depth`. A query budgets returned rows separately from at most 20,000 raw visits, still bounded by timeout_ms; a partial zero-match read does not prove absence. Anonymous wrappers do not consume semantic depth; raw recursion is capped at 128. Indices and tokens stay valid for the whole snapshot. `verbose:true` adds `_note` and the full `background_input` report; `full_output:true` restores the previous full response (both representations, all metadata, ≤2 000 nodes).\n\
+             \n\
+             DIFF READS (use them for every re-read after acting): `since:\"latest\"`, or `since:<snapshot_id>` from an earlier read of the same window, returns only what changed: `+` added, `~` changed, `-` removed rows (removed ids are the old snapshot's), a `reindexed:` line if indices shifted, or `no change since …; focused element is …`. The response carries a NEW snapshot_id: use it in tokens. An unknown, expired, other-window or differently-scoped (query/max_elements/max_depth) `since` falls back to a full read; `since_status` says why.\n\
+             \n\
+@@ -1976,13 +1976,22 @@
+ 
+     #[test]
+     fn build_elements_array_with_token_emits_element_token_per_row() {
++        use core_foundation::base::{CFRetain, TCFType};
++        use core_foundation::string::CFString;
++
+         let cache = crate::ax::snapshot::Snapshots::new();
+         let pid = 0x6abc_0001_i32;
+-        let nodes = vec![
++        let mut nodes = vec![
+             node(Some(0), "AXButton", Some("A"), 1, None, None, vec![]),
+             node(Some(1), "AXButton", Some("B"), 1, None, None, vec![]),
+             node(Some(2), "AXButton", Some("C"), 1, None, None, vec![]),
+         ];
++        let fixtures = [CFString::new("A"), CFString::new("B"), CFString::new("C")];
++        for (node, fixture) in nodes.iter_mut().zip(&fixtures) {
++            let ptr = fixture.as_CFTypeRef();
++            unsafe { CFRetain(ptr) };
++            node.element_ptr = ptr as usize;
++        }
+         let sid = cache.publish(pid, 9, crate::ax::snapshot::AxSnapshot::from_nodes(&nodes));
+         let entries = build_elements_array_with_token(&nodes, Some(sid));
+         assert_eq!(entries.len(), 3);

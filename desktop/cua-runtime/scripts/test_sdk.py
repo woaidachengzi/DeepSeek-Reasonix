@@ -56,16 +56,10 @@ def main():
         raise RuntimeError('SDK platform regressions require native macOS or GNU/Linux')
     if json.loads((build.CACHE / 'reasonix-source.json').read_text()) != build.PIN:
         raise RuntimeError('Build a clean pinned export with build.py first')
-    core = [('cua-driver-contract', ''), ('cua-driver-core', 'image_utils::tests'),
-            ('cua-driver-core', 'post_action_wait'), ('cua-driver-core', 'before_reading_the_wait'),
-            ('cua-driver-core', 'scroll'), ('cua-driver-core', 'snapshot_store::tests'),
-            ('cua-driver-core', 'element_token::tests'), ('cua-driver-core', 'window_state_view::tests'),
-            ('cua-driver-core', 'browser::adapter_support::tests')]
-    patterns = ['capture::tests', 'tools::get_window_state::tests',
-                'window_change_detector::tests', 'finder_is_located_by_name_outside_the_app_roots']
-    if platform == 'platform-linux':
-        patterns = ['wayland::tests', 'wayland::libei::tests', 'wayland::portal_screenshot::tests',
-                    'input::key_name_alias_tests', 'input::mpx_keyboard::tests', 'input::own_dialog_tests']
+    core = [('cua-driver-contract', ''), ('cua-driver-core', '')]
+    # The local fixes span input routing, AX ownership and shared CDP transport;
+    # run the full native library suite rather than independent name filters.
+    patterns = ['']
     features = ['--features', 'platform-linux/portal-libei'] if platform == 'platform-linux' else []
     with tempfile.TemporaryDirectory(prefix='reasonix-sdk-tests-') as temp:
         workspace = Path(temp) / 'libs/cua-driver/rust'

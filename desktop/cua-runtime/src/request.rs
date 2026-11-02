@@ -357,6 +357,25 @@ mod tests {
         assert!(args.get("screenshot_out_file").is_none());
     }
 
+    #[test]
+    fn unreviewed_recording_and_electron_script_routes_stay_unreachable() {
+        for action in [
+            "start_recording",
+            "stop_recording",
+            "page",
+            "drag",
+            "move_cursor",
+            "evaluate_javascript",
+        ] {
+            assert!(
+                envelope(json!({"action": action, "pid":42, "window_id":11}))
+                    .plan()
+                    .is_err(),
+                "{action}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn adapter_arguments_match_the_actual_pinned_sdk_inventory() {
         let (driver, _) = crate::create_driver().unwrap();

@@ -1,0 +1,718 @@
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs b/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs
+@@ -12,7 +12,30 @@
+ use foreign_types::ForeignType;
+ 
+ const SCREEN_SHARING_BUNDLE_ID: &str = "com.apple.ScreenSharing";
++const UTM_BUNDLE_ID: &str = "com.utmapp.UTM";
+ const SHIFT_KEY_CODE: u16 = 56;
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub enum InputForwarder {
++    ScreenSharing,
++    Utm,
++}
++
++impl InputForwarder {
++    pub fn name(self) -> &'static str {
++        match self {
++            Self::ScreenSharing => "Screen Sharing",
++            Self::Utm => "UTM",
++        }
++    }
++
++    pub fn refusal_code(self) -> &'static str {
++        match self {
++            Self::ScreenSharing => "SCREEN_SHARING_REQUIRES_FOREGROUND_HID",
++            Self::Utm => "UTM_REQUIRES_FOREGROUND_HID",
++        }
++    }
++}
+ 
+ /// Default key down→up gap and inter-key pacing.
+ const DEFAULT_KEY_GAP: std::time::Duration = std::time::Duration::from_millis(8);
+@@ -29,20 +52,24 @@
+     std::thread::sleep(key_gap());
+ }
+ 
+-fn is_screen_sharing_bundle_id(bundle_id: &str) -> bool {
+-    bundle_id == SCREEN_SHARING_BUNDLE_ID
+-}
+-
+-/// Whether `pid` is Apple's Screen Sharing client.
+-///
+-/// Screen Sharing is an input forwarder rather than a text consumer: it relays
+-/// physical virtual-key transitions to the guest and ignores the Unicode string
+-/// attached to a synthetic keycode-0 event. Keep that special case explicit so
+-/// ordinary PID-routed text input retains its layout-independent Unicode path.
+-pub fn is_screen_sharing_pid(pid: i32) -> bool {
++fn input_forwarder_for_bundle_id(bundle_id: &str) -> Option<InputForwarder> {
++    match bundle_id {
++        SCREEN_SHARING_BUNDLE_ID => Some(InputForwarder::ScreenSharing),
++        UTM_BUNDLE_ID => Some(InputForwarder::Utm),
++        _ => None,
++    }
++}
++
++/// Input forwarders relay keycodes to another machine, not Unicode payloads.
++/// Their background Unicode events can become repeated A keys in the guest.
++pub fn input_forwarder_for_pid(pid: i32) -> Option<InputForwarder> {
+     crate::apps::bundle_id_for_pid(pid)
+         .as_deref()
+-        .is_some_and(is_screen_sharing_bundle_id)
++        .and_then(input_forwarder_for_bundle_id)
++}
++
++pub fn is_input_forwarder_pid(pid: i32) -> bool {
++    input_forwarder_for_pid(pid).is_some()
+ }
+ 
+ /// Press and release a single key, delivered to `pid` without stealing focus.
+@@ -540,7 +567,7 @@
+ fn physical_text_events(ch: char) -> anyhow::Result<Vec<PhysicalTextEvent>> {
+     let (key_code, shift) = physical_key_for_char(ch).ok_or_else(|| {
+         anyhow::anyhow!(
+-            "Screen Sharing physical text delivery does not support character U+{:04X}",
++            "Physical HID text delivery does not support character U+{:04X}",
+             ch as u32
+         )
+     })?;
+@@ -725,7 +752,7 @@
+     .to_owned()
+ }
+ 
+-pub(super) fn key_name_to_code(key: &str) -> anyhow::Result<u16> {
++pub(crate) fn key_name_to_code(key: &str) -> anyhow::Result<u16> {
+     let code = match canonical_key_name(key).as_str() {
+         "return" | "enter" => 36,
+         "tab" => 48,
+@@ -1083,9 +1110,22 @@
+     }
+ 
+     #[test]
+-    fn screen_sharing_detection_is_exact_and_case_sensitive() {
+-        assert!(is_screen_sharing_bundle_id("com.apple.ScreenSharing"));
+-        assert!(!is_screen_sharing_bundle_id("com.apple.screensharing"));
+-        assert!(!is_screen_sharing_bundle_id("com.microsoft.rdc.macos"));
+-    }
+-}
++    fn input_forwarder_detection_is_exact_and_case_sensitive() {
++        assert_eq!(
++            input_forwarder_for_bundle_id("com.apple.ScreenSharing"),
++            Some(InputForwarder::ScreenSharing)
++        );
++        assert_eq!(
++            input_forwarder_for_bundle_id("com.utmapp.UTM"),
++            Some(InputForwarder::Utm)
++        );
++        for id in [
++            "com.apple.screensharing",
++            "com.utmapp.utm",
++            "com.utmapp.UTM.helper",
++            "com.microsoft.rdc.macos",
++        ] {
++            assert_eq!(input_forwarder_for_bundle_id(id), None);
++        }
++    }
++}
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs
+@@ -41,6 +41,9 @@
+ use cua_driver_core::background_input::BackgroundRefusal;
+ 
+ use super::ToolState;
++
++#[path = "text_delivery_policy.rs"]
++mod text_delivery_policy;
+ 
+ pub struct TypeTextTool {
+     pub state: Arc<ToolState>,
+@@ -96,26 +99,28 @@
+     })
+ }
+ 
+-fn screen_sharing_delivery_error(
+-    is_screen_sharing: bool,
++fn input_forwarder_delivery_error(
++    forwarder: Option<crate::input::keyboard::InputForwarder>,
+     foreground: bool,
+     window_id: Option<u32>,
+ ) -> Option<ToolResult> {
+-    if !is_screen_sharing || (foreground && window_id.is_some()) {
++    let forwarder = forwarder?;
++    if foreground && window_id.is_some() {
+         return None;
+     }
+     Some(
+-        ToolResult::error(
+-            "Screen Sharing text input requires delivery_mode:\"foreground\" and window_id \
++        ToolResult::error(format!(
++            "{} text input requires delivery_mode:\"foreground\" and window_id \
+              so Cua Driver can deliver physical HID key transitions safely.",
+-        )
++            forwarder.name()
++        ))
+         .with_structured(serde_json::json!({
+-            "code": "SCREEN_SHARING_REQUIRES_FOREGROUND_HID",
++            "code": forwarder.refusal_code(),
+             "effect": "refused",
+             "escalation": {
+                 "recommended": "foreground",
+-                "reason": "Screen Sharing forwards physical keycodes; background PID-routed \
+-                           Unicode events can corrupt guest text.",
++                "reason": format!("{} forwards physical keycodes; background PID-routed \
++                           Unicode events can corrupt guest text.", forwarder.name()),
+                 "requires": ["window_id"]
+             }
+         })),
+@@ -190,8 +195,8 @@
+         };
+         let delay_ms = args.u64_or("delay_ms", 30);
+         let delivery_mode = super::DeliveryMode::parse(args.opt_str("delivery_mode").as_deref());
+-        if let Some(error) = screen_sharing_delivery_error(
+-            crate::input::keyboard::is_screen_sharing_pid(pid),
++        if let Some(error) = input_forwarder_delivery_error(
++            crate::input::keyboard::input_forwarder_for_pid(pid),
+             delivery_mode.is_foreground(),
+             window_id,
+         ) {
+@@ -210,6 +215,13 @@
+         }
+ 
+         let element_guard = element_guard.zip(element_index);
++
++        if let Some(refusal) = text_delivery_policy::gecko_background_refusal(
++            apps::bundle_id_for_pid(pid).as_deref(),
++            delivery_mode.is_foreground(),
++        ) {
++            return refusal;
++        }
+ 
+         // ── Exact-target background gate (macOS background input v1) ──
+         // A window-addressed background insert must prove exact delivery
+@@ -1409,9 +1421,9 @@
+ 
+     // --- Foreground rung: explicit agent request (skip AX/background ladder). ---
+     if delivery_mode.is_foreground() {
+-        let screen_sharing_target = crate::input::keyboard::is_screen_sharing_pid(pid);
++        let input_forwarder_target = crate::input::keyboard::is_input_forwarder_pid(pid);
+         if let Some(refusal) = synthesis_preflight(
+-            if screen_sharing_target {
++            if input_forwarder_target {
+                 TextDeliveryRoute::PhysicalSynthesis
+             } else {
+                 TextDeliveryRoute::UnicodeSynthesis
+@@ -1450,8 +1462,8 @@
+             )
+         };
+         let ((verified, delivered_chars), fronted) = match window_id {
+-            Some(wid) if screen_sharing_target => {
+-                // Screen Sharing forwards physical HID transitions to the
++            Some(wid) if input_forwarder_target => {
++                // Input forwarders relay physical HID transitions to the
+                 // guest. PID-routed Unicode events all carry keycode 0 (the A
+                 // key), so a guest sees "aaaa"; modifier flags alone likewise
+                 // turn Cmd+V into plain "v". The explicit foreground rung may
+@@ -1684,50 +1696,52 @@
+             Some(TypedProgress::Complete | TypedProgress::Partial(_)) => unreachable!(),
+         };
+         tracing::debug!(
+-            "AX write did not land for {role} \"{title}\" (err={err}); \
+-             falling back to CGEvent keystrokes"
++            "AX write could not be confirmed for {role} \"{title}\" (err={err}); \
++             checking whether a keyboard fallback is safe"
+         );
+     } else {
+         tracing::debug!("No focused element for pid {pid}; using CGEvent keystrokes");
+     }
+ 
+-    // The semantic AX rung did not land and this request is restricted to it:
+-    // the process-scoped CGEvent rung could reach a sibling window, so return
+-    // the structured refusal instead of escalating.
+-    if let BackgroundKeyboardPolicy::SemanticOnly(refusal) = keyboard_policy {
+-        return Ok(TypeTextDelivery::Refused(refusal));
+-    }
+-
+-    if let Some(refusal) = synthesis_preflight(
+-        TextDeliveryRoute::UnicodeSynthesis,
+-        text.chars().count(),
+-        delay_ms,
+-    ) {
+-        return Ok(TypeTextDelivery::SynthesisRefused {
++    text_delivery_policy::after_ax_attempt(ax_attempt, || {
++        // The semantic AX rung did not land and this request is restricted to it:
++        // the process-scoped CGEvent rung could reach a sibling window, so return
++        // the structured refusal instead of escalating.
++        if let BackgroundKeyboardPolicy::SemanticOnly(refusal) = keyboard_policy {
++            return Ok(TypeTextDelivery::Refused(refusal));
++        }
++
++        if let Some(refusal) = synthesis_preflight(
++            TextDeliveryRoute::UnicodeSynthesis,
++            text.chars().count(),
++            delay_ms,
++        ) {
++            return Ok(TypeTextDelivery::SynthesisRefused {
++                path: PATH_KEY_EVENTS,
++                refusal,
++                ax_attempt,
++            });
++        }
++
++        // --- Background rung 2: CGEvent keystrokes with read-back. ---
++        // Never clear here: a partial AX write is rare, and clearing would violate
++        // insert-at-cursor semantics.
++        let (verified, delivered_chars) = cgevent_type_verified(
++            pid,
++            text,
++            delay_ms,
++            before.as_deref(),
++            element_ptr_and_idx,
++            /*settle_ms=*/ 0,
++            window_id,
++        )?;
++        Ok(TypeTextDelivery::Typed(TypeTextOutcome {
++            detail: format!(" via CGEvent ({delay_ms}ms delay)"),
+             path: PATH_KEY_EVENTS,
+-            refusal,
+-            ax_attempt,
+-        });
+-    }
+-
+-    // --- Background rung 2: CGEvent keystrokes with read-back. ---
+-    // Never clear here: a partial AX write is rare, and clearing would violate
+-    // insert-at-cursor semantics.
+-    let (verified, delivered_chars) = cgevent_type_verified(
+-        pid,
+-        text,
+-        delay_ms,
+-        before.as_deref(),
+-        element_ptr_and_idx,
+-        /*settle_ms=*/ 0,
+-        window_id,
+-    )?;
+-    Ok(TypeTextDelivery::Typed(TypeTextOutcome {
+-        detail: format!(" via CGEvent ({delay_ms}ms delay)"),
+-        path: PATH_KEY_EVENTS,
+-        verified,
+-        delivered_chars,
+-    }))
++            verified,
++            delivered_chars,
++        }))
++    })
+ }
+ 
+ /// Whether a focused element takes typed text: a text role, or any element
+@@ -2299,18 +2313,20 @@
+     }
+ 
+     #[test]
+-    fn screen_sharing_text_fails_closed_without_foreground_window() {
+-        for (foreground, window_id) in [(false, None), (false, Some(7)), (true, None)] {
+-            let result = screen_sharing_delivery_error(true, foreground, window_id)
+-                .expect("unsafe Screen Sharing route must be refused");
+-            assert_eq!(result.is_error, Some(true));
+-            let structured = result.structured_content.unwrap();
+-            assert_eq!(structured["code"], "SCREEN_SHARING_REQUIRES_FOREGROUND_HID");
+-            assert_eq!(structured["effect"], "refused");
+-            assert_eq!(structured["escalation"]["recommended"], "foreground");
+-            assert_eq!(structured["escalation"]["requires"][0], "window_id");
+-        }
+-        assert!(screen_sharing_delivery_error(true, true, Some(7)).is_none());
+-        assert!(screen_sharing_delivery_error(false, false, None).is_none());
+-    }
+-}
++    fn input_forwarder_routes_require_explicit_foreground_window() {
++        use crate::input::keyboard::InputForwarder;
++        for target in [InputForwarder::ScreenSharing, InputForwarder::Utm] {
++            for (foreground, window_id) in [(false, None), (false, Some(7)), (true, None)] {
++                let result = input_forwarder_delivery_error(Some(target), foreground, window_id)
++                    .expect("unsafe input-forwarder route");
++                assert_eq!(result.is_error, Some(true));
++                let structured = result.structured_content.unwrap();
++                assert_eq!(structured["code"], target.refusal_code());
++                assert_eq!(structured["effect"], "refused");
++                assert_eq!(structured["escalation"]["requires"][0], "window_id");
++            }
++            assert!(input_forwarder_delivery_error(Some(target), true, Some(7)).is_none());
++        }
++        assert!(input_forwarder_delivery_error(None, false, None).is_none());
++    }
++}
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs
+@@ -141,27 +141,29 @@
+     }
+ }
+ 
+-fn screen_sharing_modifier_delivery_error(
+-    is_screen_sharing: bool,
++pub(super) fn input_forwarder_modifier_delivery_error(
++    forwarder: Option<crate::input::keyboard::InputForwarder>,
+     has_modifiers: bool,
+     foreground: bool,
+     window_id: Option<u32>,
+ ) -> Option<ToolResult> {
+-    if !is_screen_sharing || !has_modifiers || (foreground && window_id.is_some()) {
++    let forwarder = forwarder?;
++    if !has_modifiers || (foreground && window_id.is_some()) {
+         return None;
+     }
+     Some(
+-        ToolResult::error(
+-            "Screen Sharing modifier hotkeys require delivery_mode:\"foreground\" and window_id \
++        ToolResult::error(format!(
++            "{} modifier hotkeys require delivery_mode:\"foreground\" and window_id \
+              so Cua Driver can deliver physical modifier transitions safely.",
+-        )
++            forwarder.name()
++        ))
+         .with_structured(serde_json::json!({
+-            "code": "SCREEN_SHARING_REQUIRES_FOREGROUND_HID",
++            "code": forwarder.refusal_code(),
+             "effect": "refused",
+             "escalation": {
+                 "recommended": "foreground",
+-                "reason": "Screen Sharing does not forward modifier state from background \
+-                           PID-routed base-key events.",
++                "reason": format!("{} does not forward modifier state from background \
++                           PID-routed base-key events.", forwarder.name()),
+                 "requires": ["window_id"]
+             }
+         })),
+@@ -279,13 +281,11 @@
+ 
+         let element_ptr = element_guard.as_ref().map(|guard| guard.as_ptr());
+ 
+-        let screen_sharing_target = crate::input::keyboard::is_screen_sharing_pid(pid);
+-        if let Some(error) = screen_sharing_modifier_delivery_error(
+-            screen_sharing_target,
+-            !modifiers.is_empty(),
+-            fg,
+-            window_id,
+-        ) {
++        let forwarder = crate::input::keyboard::input_forwarder_for_pid(pid);
++        let input_forwarder_target = forwarder.is_some();
++        if let Some(error) =
++            input_forwarder_modifier_delivery_error(forwarder, !modifiers.is_empty(), fg, window_id)
++        {
+             return error;
+         }
+ 
+@@ -548,7 +548,7 @@
+                                 pid as libc::pid_t,
+                                 wid,
+                                 || {
+-                                    if screen_sharing_target {
++                                    if input_forwarder_target {
+                                         crate::input::keyboard::press_key_bare_global(&key, &m)
+                                     } else {
+                                         crate::input::keyboard::press_key_global(&key, &m)
+@@ -693,19 +693,35 @@
+     }
+ 
+     #[test]
+-    fn screen_sharing_modifier_hotkeys_fail_closed_without_foreground_window() {
+-        for (foreground, window_id) in [(false, None), (false, Some(7)), (true, None)] {
+-            let result = screen_sharing_modifier_delivery_error(true, true, foreground, window_id)
+-                .expect("unsafe Screen Sharing modifier route must be refused");
+-            assert_eq!(result.is_error, Some(true));
+-            let structured = result.structured_content.unwrap();
+-            assert_eq!(structured["code"], "SCREEN_SHARING_REQUIRES_FOREGROUND_HID");
+-            assert_eq!(structured["effect"], "refused");
+-            assert_eq!(structured["escalation"]["recommended"], "foreground");
+-            assert_eq!(structured["escalation"]["requires"][0], "window_id");
+-        }
+-        assert!(screen_sharing_modifier_delivery_error(true, true, true, Some(7)).is_none());
+-        assert!(screen_sharing_modifier_delivery_error(true, false, false, None).is_none());
+-        assert!(screen_sharing_modifier_delivery_error(false, true, false, None).is_none());
+-    }
+-}
++    fn input_forwarder_routes_require_explicit_foreground_window() {
++        use crate::input::keyboard::InputForwarder;
++        for target in [InputForwarder::ScreenSharing, InputForwarder::Utm] {
++            for (foreground, window_id) in [(false, None), (false, Some(7)), (true, None)] {
++                let result = input_forwarder_modifier_delivery_error(
++                    Some(target),
++                    true,
++                    foreground,
++                    window_id,
++                )
++                .expect("unsafe input-forwarder route");
++                assert_eq!(result.is_error, Some(true));
++                let structured = result.structured_content.unwrap();
++                assert_eq!(structured["code"], target.refusal_code());
++                assert_eq!(structured["effect"], "refused");
++                assert_eq!(structured["escalation"]["requires"][0], "window_id");
++            }
++            assert!(
++                input_forwarder_modifier_delivery_error(Some(target), true, true, Some(7))
++                    .is_none()
++            );
++        }
++        assert!(input_forwarder_modifier_delivery_error(None, true, false, None).is_none());
++        assert!(input_forwarder_modifier_delivery_error(
++            Some(InputForwarder::Utm),
++            false,
++            false,
++            None
++        )
++        .is_none());
++    }
++}
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs
+@@ -31,6 +31,30 @@
+     pub fn new(state: Arc<ToolState>) -> Self {
+         Self { state }
+     }
++}
++
++fn input_forwarder_key_delivery_error(
++    forwarder: Option<crate::input::keyboard::InputForwarder>,
++    key: &str,
++    modifiers: &[String],
++    foreground: bool,
++    window_id: Option<u32>,
++) -> Option<ToolResult> {
++    let modifier_key = matches!(
++        crate::input::keyboard::key_name_to_code(key),
++        Ok(55..=59 | 63)
++    );
++    let shifted_plus = key == "+" || key.eq_ignore_ascii_case("plus");
++    super::hotkey::input_forwarder_modifier_delivery_error(
++        forwarder,
++        !modifiers.is_empty() || modifier_key || shifted_plus,
++        foreground,
++        window_id,
++    )
++}
++
++fn needs_foreground_hid(foreground: bool, px_focus: bool, input_forwarder: bool) -> bool {
++    foreground && (!px_focus || input_forwarder)
+ }
+ 
+ static DEF: std::sync::OnceLock<ToolDef> = std::sync::OnceLock::new();
+@@ -307,7 +331,7 @@
+         }
+ 
+         // Remap "+" / "plus" → "=" + Shift (same physical key on US layout).
+-        let key = if key_raw == "+" || key_raw == "plus" {
++        let key = if key_raw == "+" || key_raw.eq_ignore_ascii_case("plus") {
+             if !modifiers.iter().any(|m| m.eq_ignore_ascii_case("shift")) {
+                 modifiers.push("shift".to_string());
+             }
+@@ -331,6 +355,17 @@
+             return ToolResult::error(
+                 "Pass either element_token (ax) or x,y (px) to press_key, not both.",
+             );
++        }
++
++        // press_key accepts modifier combinations too; it must not bypass the
++        // hotkey guard and send a bare base key to an input forwarder's guest.
++        // Refuse before the background gate or any pixel-focus click.
++        let forwarder = crate::input::keyboard::input_forwarder_for_pid(pid);
++        let input_forwarder_target = forwarder.is_some();
++        if let Some(error) =
++            input_forwarder_key_delivery_error(forwarder, &key, &modifiers, fg, window_id)
++        {
++            return error;
+         }
+ 
+         let pre_focus_ptr: Option<usize> = pre_focus_guard.as_ref().map(|g| g.as_ptr());
+@@ -449,9 +484,10 @@
+                     // physical HID key down/up pair, then restore. PID-routed events without the
+                     // authentication envelope reach NSMenu, but Chromium/Electron may
+                     // silently discard them even while frontmost; the guarded HID route
+-                    // is accepted by both. Skipped when px-focus already handled the
+-                    // target-specific foreground transition.
+-                    if fg && !px_focus {
++                    // is accepted by both. Input forwarders still need physical
++                    // modifier transitions after px-focus; a PID-routed event
++                    // would lose them even though the window was just fronted.
++                    if needs_foreground_hid(fg, px_focus, input_forwarder_target) {
+                         let wid = window_id.ok_or_else(|| {
+                             anyhow::anyhow!(
+                                 "delivery_mode=foreground requires window_id for press_key"
+@@ -534,6 +570,67 @@
+     use super::*;
+ 
+     #[test]
++    fn input_forwarder_modified_keys_require_explicit_foreground_window() {
++        use crate::input::keyboard::InputForwarder;
++        for forwarder in [InputForwarder::ScreenSharing, InputForwarder::Utm] {
++            for (key, modifiers) in [
++                ("v", vec!["cmd".to_owned()]),
++                ("=", vec!["shift".to_owned()]),
++                ("cmd", vec![]),
++                ("shift", vec![]),
++                ("fn", vec![]),
++                ("Caps_Lock", vec![]),
++                ("+", vec![]),
++                ("Plus", vec![]),
++            ] {
++                for (foreground, window_id) in [(false, None), (false, Some(7)), (true, None)] {
++                    let result = input_forwarder_key_delivery_error(
++                        Some(forwarder),
++                        key,
++                        &modifiers,
++                        foreground,
++                        window_id,
++                    )
++                    .expect("unsafe modifier route must be refused before focus");
++                    let structured = result.structured_content.unwrap();
++                    assert_eq!(structured["code"], forwarder.refusal_code());
++                    assert_eq!(structured["effect"], "refused");
++                }
++                assert!(input_forwarder_key_delivery_error(
++                    Some(forwarder),
++                    key,
++                    &modifiers,
++                    true,
++                    Some(7),
++                )
++                .is_none());
++            }
++            assert!(input_forwarder_key_delivery_error(
++                Some(forwarder),
++                "return",
++                &[],
++                false,
++                Some(7),
++            )
++            .is_none());
++        }
++        assert!(
++            input_forwarder_key_delivery_error(None, "v", &["cmd".to_owned()], false, Some(7),)
++                .is_none()
++        );
++    }
++
++    #[test]
++    fn foreground_forwarders_keep_physical_hid_even_after_pixel_focus() {
++        assert!(needs_foreground_hid(true, true, true));
++        assert!(needs_foreground_hid(true, false, true));
++        assert!(needs_foreground_hid(true, false, false));
++        assert!(!needs_foreground_hid(true, true, false));
++        assert!(!needs_foreground_hid(false, true, true));
++        assert!(!needs_foreground_hid(false, false, true));
++    }
++
++    #[test]
+     fn targeted_key_requires_focus_readback_before_dispatch() {
+         use std::cell::RefCell;
+         let events = RefCell::new(Vec::new());
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/text_delivery_policy.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/text_delivery_policy.rs
+new file mode 100644
+--- /dev/null
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/text_delivery_policy.rs
+@@ -0,0 +1,104 @@
++use cua_driver_core::protocol::ToolResult;
++
++// A background AX insert followed by Unicode keys has been observed to insert
++// twice in Gecko. Refuse the known browser families before either actuator;
++// their explicitly requested foreground path remains separately verifiable.
++pub(super) fn gecko_background_refusal(
++    bundle_id: Option<&str>,
++    foreground: bool,
++) -> Option<ToolResult> {
++    let gecko = matches!(
++        bundle_id,
++        Some(
++            "org.mozilla.firefox"
++                | "org.mozilla.firefoxdeveloperedition"
++                | "org.mozilla.nightly"
++                | "app.zen-browser.zen"
++        )
++    );
++    if !gecko || foreground {
++        return None;
++    }
++    Some(ToolResult::error(
++        "Native background text delivery to this Gecko browser is not proven safe: an AX insert and keyboard fallback may duplicate text. No text was sent. Request explicit foreground delivery for the exact window, then verify the field from fresh state; do not blindly resend."
++    ).with_structured(serde_json::json!({
++        "code":"GECKO_BACKGROUND_TEXT_UNSUPPORTED", "effect":"refused", "verified":false,
++        "escalation":{"recommended":"foreground", "requires":["window_id"]}
++    })))
++}
++
++// A successful/uncertain AX write owns this call's one insertion attempt.
++// Keep the entire keyboard fallback behind this boundary, including policy and
++// pacing checks, so an uncertain write cannot be relabelled "no input sent".
++pub(super) fn after_ax_attempt(
++    attempt: super::AxAttempt,
++    fallback: impl FnOnce() -> anyhow::Result<super::TypeTextDelivery>,
++) -> anyhow::Result<super::TypeTextDelivery> {
++    if attempt == super::AxAttempt::Unverifiable {
++        return Ok(super::TypeTextDelivery::Typed(super::TypeTextOutcome {
++            detail: " via AX; delivery is uncertain, so no CGEvent fallback was sent. Inspect fresh state before further input".into(),
++            path: super::PATH_AX, verified: false, delivered_chars: None,
++        }));
++    }
++    fallback()
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn an_uncertain_ax_attempt_never_runs_the_keyboard_actuator() {
++        let calls = std::cell::Cell::new(0);
++        let result = after_ax_attempt(super::super::AxAttempt::Unverifiable, || {
++            calls.set(calls.get() + 1);
++            panic!("duplicate insertion");
++        })
++        .unwrap();
++        assert_eq!(calls.get(), 0);
++        let super::super::TypeTextDelivery::Typed(outcome) = result else {
++            panic!("a possible write must be uncertain, not refused");
++        };
++        assert_eq!(outcome.path, super::super::PATH_AX);
++        assert!(!outcome.verified);
++        assert_eq!(outcome.delivered_chars, None);
++        assert!(outcome.detail.contains("no CGEvent fallback"));
++        for attempt in [
++            super::super::AxAttempt::Rejected,
++            super::super::AxAttempt::Unchanged,
++            super::super::AxAttempt::NotAttempted,
++        ] {
++            let _ = after_ax_attempt(attempt, || {
++                calls.set(calls.get() + 1);
++                Err(anyhow::anyhow!("test actuator"))
++            });
++        }
++        assert_eq!(calls.get(), 3);
++    }
++
++    #[test]
++    fn gecko_background_refuses_without_claiming_text_delivery() {
++        for bundle in [
++            "org.mozilla.firefox",
++            "org.mozilla.firefoxdeveloperedition",
++            "org.mozilla.nightly",
++            "app.zen-browser.zen",
++        ] {
++            let result = gecko_background_refusal(Some(bundle), false).unwrap();
++            assert_eq!(result.is_error, Some(true));
++            let value = result.structured_content.unwrap();
++            assert_eq!(value["code"], "GECKO_BACKGROUND_TEXT_UNSUPPORTED");
++            assert_eq!(value["effect"], "refused");
++            assert_eq!(value["verified"], false);
++            assert!(gecko_background_refusal(Some(bundle), true).is_none());
++        }
++        for bundle in [
++            None,
++            Some("com.apple.Safari"),
++            Some("com.google.Chrome"),
++            Some("app.zen-browser.zen.helper"),
++        ] {
++            assert!(gecko_background_refusal(bundle, false).is_none());
++        }
++    }
++}

@@ -102,6 +102,15 @@ class BackportTests(unittest.TestCase):
         self.assertEqual(self.source.read_bytes(), b'new\n')
         self.assertEqual(records, [{**self.entry, 'reason': 'fixture', 'upstream_revision': 'reviewed-commit'}])
 
+    def test_local_fix_keeps_its_actual_provenance(self):
+        local = {key: value for key, value in self.backport.items() if key != 'revision'}
+        local.update(id='local-window-query', source_url='https://github.com/trycua/cua/issues/6270')
+        with patch.object(build, 'PIN', dict(scope='libs/cua-driver/rust', local_fixes=[local])):
+            records = build.apply_backports()
+        self.assertEqual(self.source.read_bytes(), b'new\n')
+        self.assertEqual(records[0]['local_fix'], 'local-window-query')
+        self.assertNotIn('upstream_revision', records[0])
+
     def new_file_patch(self):
         self.patch.write_text(f'diff --git a/{self.relative} b/{self.relative}\n'
                               'new file mode 100644\n'

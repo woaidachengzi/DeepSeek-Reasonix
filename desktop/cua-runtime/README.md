@@ -83,11 +83,42 @@ python3 desktop/cua-runtime/scripts/test_sdk.py
 platform and its path dependencies, retaining the SDK skills and Wayland helper
 resources used by compile-time includes. It rejects registry dependencies not
 present in the shipped lock and fails if a selected regression matches no tests.
-The macOS run covers 243 SDK regressions; the wrapper covers 14 additional cases,
-including patch-fingerprint mismatch before dispatch. The explicit Linux Preview
+The runner executes the complete contract, core and native platform library
+suites; the wrapper separately tests patch-fingerprint mismatch before dispatch
+and the host action boundary. The explicit Linux Preview
 workflow also builds the Cua Debian variant and runs the native libei fake-server
 and Wayland shortcut regressions. That workflow does not replace live compositor
 acceptance on a GNOME/KDE desktop.
+
+## Issue review (2026-11-03)
+
+Version `0.1.69` retains the pinned `0.38.0` base. `upstream.json` distinguishes
+upstream backports from locally authored fixes: each local fix has an issue URL,
+an identity, a patch checksum and exact input/output file checksums. Both kinds
+are reproduced from the clean export and shipped with the notices. The CDP
+change is taken from the reviewed **draft, unmerged** PR head below; it is not
+represented as a released upstream fix.
+
+| Report | Local disposition |
+| --- | --- |
+| [Cua #6133: AXPress timeout](https://github.com/trycua/cua/issues/6133) | A background `-25204` is an uncertain dispatch. Neither the element selection fallback nor the pixel AX-hit-test fallback may send another mutation; the result requires fresh observation. Foreground behavior remains separately authorized. |
+| [Cua #6299: large CDP frames](https://github.com/trycua/cua/issues/6299), [draft PR #6307](https://github.com/trycua/cua/pull/6307) | Backport draft head `bf4be9e7379addd9449639128c22b311663c04f7`: both frame and aggregate-message budgets are 64 MiB. Repeated 20 MiB semantic and DOM-reference snapshots retain the same binding. Larger replies still fail at the explicit cap. |
+| [Cua #6296: UTM input](https://github.com/trycua/cua/issues/6296) | Recognize UTM as an input forwarder. Refuse background text and modifier chords before focus or input. Explicit foreground delivery requires an exact window and uses the existing physical HID route. Screen Sharing retains its refusal identity. |
+| [Cua #6269: Gecko duplicate input](https://github.com/trycua/cua/issues/6269) | Known Firefox/Zen bundle IDs refuse native background text before either actuator. An uncertain AX insertion never triggers a second keyboard insertion. No live UTM/Zen compatibility claim is made. |
+| [Cua #6270: complex-window query reachability](https://github.com/trycua/cua/issues/6270) | Match during the AX walk: unmatched rows do not consume the returned-row budget. Matches and ancestors share that budget, with at most 20,000 raw visits, 128 raw levels and the existing deadline. Anonymous wrappers do not consume semantic depth. Sparse snapshot slots preserve original element tokens; omitted slots refuse. A partial tree or zero matches does not prove absence. |
+| [Reasonix #14838: huge-context compaction](https://github.com/esengine/DeepSeek-Reasonix/issues/14838) | Keep every strictly reducing checkpoint even while above the provider ceiling. At most four summaries run per recovery preflight; later preflights resume the saved digest. Sampling remains blocked until safe. Cancellation, task budget and later failure preserve progress; summary usage is charged once. Canonical history is unchanged. |
+| [Reasonix #14878: HTTP history size](https://github.com/esengine/DeepSeek-Reasonix/issues/14878) | Optional bounded history pages precede projection/JSON encoding; old no-parameter array clients remain compatible. The built-in web view loads recent history first and prepends older pages with a session-generation fence. Controller snapshots and mirrored session loading still read the underlying history in full; this is not a streaming storage implementation. See `internal/serve/HISTORY_PAGING.md`. |
+| [Cua #6250: recordings contain secrets](https://github.com/trycua/cua/issues/6250), [#6258: Electron debug signal](https://github.com/trycua/cua/issues/6258) | Recording and arbitrary SDK page/script/native move/drag routes remain unreachable through both the host schema and adapter plan. Regression tests verify rejection before starting a worker or dispatching to the SDK. No recording/redaction feature or Electron debug-signal activation is added. |
+
+The macOS verification passed 1,825 default SDK library tests (67 contract,
+1,107 core, 651 macOS; eight upstream tests remained ignored), 15 adapter tests
+and 11 source-export tests. SDK tests exercise production transport, routing,
+AX ownership and snapshot logic without typing into user applications.
+Native Linux/Windows acceptance,
+live UTM/Zen delivery, and a performance claim for every complex macOS app are
+outside the evidence collected on this Mac. An individual AX call still uses
+the SDK's native timeout; the query deadline is not a promise that every native
+call finishes within that many milliseconds.
 
 ## Upstream review (2026-11-02)
 

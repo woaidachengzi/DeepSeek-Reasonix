@@ -18,7 +18,7 @@ import (
 const cuaProtocol = 1
 const maxCuaReply = 16 << 20
 const cuaSourceRevision = "e754cfec69c41400eb2aabde716c27d15607b2f0"
-const cuaSourceFingerprint = "57286ee0abd3866ecae778cfeb08b9ab8a0d30c53144a8ae80e770fd5ff9d360"
+const cuaSourceFingerprint = "d6b8f532a097cd75aafd692fc3a35a2cb34bc0910788ee46283723e4e3a62390"
 
 type CuaImage struct {
 	MIME string `json:"mime_type"`

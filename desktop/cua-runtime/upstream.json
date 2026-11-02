@@ -308,6 +308,124 @@
           "patched_sha256": "f7a10128216ccc5338b93761786a20dc6240762efe57866f15fd0731c0609a33"
         }
       ]
+    },
+    {
+      "revision": "bf4be9e7379addd9449639128c22b311663c04f7",
+      "source_url": "https://github.com/trycua/cua/pull/6307",
+      "status": "draft-unmerged",
+      "reason": "Reviewed draft PR 6307 head: bound both CDP frames and aggregate messages at 64 MiB; retain binding across repeated large observations.",
+      "patch": "patches/bf4be9e737-cdp-message-budget.patch",
+      "sha256": "d39293c22ddad02ed918d6043d20cefff2e5ee2e7bc4bcf3168be9f964a82494",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/browser/cdp_ws.rs",
+          "original_sha256": "b8e2933c8eb875865435fd321eaf3e3d67e6325a3da783d9d8e166c181a43306",
+          "patched_sha256": "c3f2a7783cd91fb2911ccbc6b23d1746a23631a4cd60d2e54eb6e61c5b675551"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/browser/v2_tests.rs",
+          "original_sha256": "772ea18aca4ff4949f4a7d5767250d35811875199dff943bf8dba2e7dae9d88f",
+          "patched_sha256": "273e6f3caf9951737b261aa73180f6ebfee1c8855d8c6447aa58329e0f7133a7"
+        }
+      ]
+    }
+  ],
+  "local_fixes": [
+    {
+      "id": "reasonix-ax-timeout-no-fallback",
+      "source_url": "https://github.com/trycua/cua/issues/6133",
+      "reason": "Locally authored: a background AXPress timeout may have acted; return an uncertain effect without selection or pixel-event fallback.",
+      "patch": "patches/reasonix-ax-timeout-no-fallback.patch",
+      "sha256": "71788bb76f37c91dc1ff73ae8b913c494a57e8e07846163534f45a6ae2bde317",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs",
+          "original_sha256": "25e446df576d5470da3b67cdd912304a2368e65f512213316fd0fd2c10b8245a",
+          "patched_sha256": "2a75cdc7bfd4388deff94069675e8722cd730033a0de4d9d6134e612dcc9e504"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/click_timeout.rs",
+          "original_sha256": null,
+          "patched_sha256": "a70c0e79a386b43859c30322ce8ecd692fb1941f9108eeb904f0f685fd282fe4"
+        }
+      ]
+    },
+    {
+      "id": "reasonix-native-text-routing",
+      "source_url": "https://github.com/trycua/cua/issues/6296",
+      "source_urls": [
+        "https://github.com/trycua/cua/issues/6269",
+        "https://github.com/trycua/cua/pull/6297"
+      ],
+      "reason": "Locally adapted input-forwarder routing: refuse unsafe UTM background text/modifier input and known Gecko background text; uncertain AX insertion never sends a second keyboard insert.",
+      "patch": "patches/reasonix-native-text-routing.patch",
+      "sha256": "3e3f504dc0aa83a437daecc0cdb3f47a04fb5341fa82f18e9cca5bce7b54ce5f",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs",
+          "original_sha256": "5ed07b20a5f378c8429cd09b5a5cf608ddcd1a6a840888d23d37e30ca800514a",
+          "patched_sha256": "bcd4bb08bc5f5bde38be36329d1c933cf849d9781841d7e545574f9a2f717cec"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs",
+          "original_sha256": "21ba021ed76b4bd9be9af8e9700bdddec945e5f4cbb571a917976ef8ad436c6d",
+          "patched_sha256": "8743e7ab8cdbae1d55943fc4fd97412c3c85ba84200f944d1ab88286c83a1535"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs",
+          "original_sha256": "901af77732809138fe275d7acb151d1e6285f58d9752a79f1c03a2930e5c5f8f",
+          "patched_sha256": "6958743fe822b04077296212faed3fdbc379fb5f13fbccaa856398fcd0081089"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs",
+          "original_sha256": "1eb04e1e402ecd0241fabf1a9d98ee2aa3eaf0e948d0f0be12e74cc66b5a9d5b",
+          "patched_sha256": "8df3aa47ccdaeb2a081d5179ce889371859f4860ca646389c2c931127f75f794"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/text_delivery_policy.rs",
+          "original_sha256": null,
+          "patched_sha256": "a0bb2d34e772b5567bacdc5540d218a5ae0d0c0b26f5c49c69edafc405bfc7b5"
+        }
+      ]
+    },
+    {
+      "id": "reasonix-bounded-ax-query",
+      "source_url": "https://github.com/trycua/cua/issues/6270",
+      "reason": "Locally authored: query matches and ancestors share an output bound independently of 20,000 raw visits, existing timeout and 128 raw levels; preserve sparse element token ownership.",
+      "patch": "patches/reasonix-bounded-ax-query.patch",
+      "sha256": "493fe58d49bd0e4dcef6ced11a68d6b217cc9705985e50ca70f263cfe9607894",
+      "files": [
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/walk_budget.rs",
+          "original_sha256": "9a0ea50059adae1bb3bc96071aead65c66b663a0f07380705814847f6a92b1e4",
+          "patched_sha256": "7faa9086fcdd712543413ad1b1336e7ebdeaccc8ee58746b2f099fff2cdce5f8"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/cua-driver-core/src/snapshot_store.rs",
+          "original_sha256": "a6d1ac69cfa97d69ae0933ce794429da494cf67619e8d81c06dbf9d991d53493",
+          "patched_sha256": "12a4113098fd14747506502628aa787f55a31e599315445d48191eec7d76ec4a"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree.rs",
+          "original_sha256": "bdd1b29d6f3374bf9633c9669b9458e7d15690973f8070c932403461426980ab",
+          "patched_sha256": "ba0f5e5a706a05e6b7c74e06cdef5a7b95f71de75f01b15c7f88de8185d07074"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/ax/tree_query.rs",
+          "original_sha256": null,
+          "patched_sha256": "4c791c3a8b7332dea1d028f831c66e13828d62949962eabd58f82db0718ebf49"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/ax/snapshot.rs",
+          "original_sha256": "15b05543c02e41a7499574f508e5a80ced4585b69d37651030cd21ddbbdc6874",
+          "patched_sha256": "892c37a780fe589841c45babfae32bdae7da62837b3ca818f570700994b01f5a"
+        },
+        {
+          "file": "libs/cua-driver/rust/crates/platform-macos/src/tools/get_window_state.rs",
+          "original_sha256": "a64c8e8595ec0cb83f0d89f169deaf1f571a5c2670ef901949c52cba4a6de41b",
+          "patched_sha256": "0265217edeb8f63e2c34ecc48d8d119dfb9c91f34d2d05be0cf655bb7083f418"
+        }
+      ]
     }
   ]
 }

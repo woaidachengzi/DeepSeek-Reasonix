@@ -1,0 +1,317 @@
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs
+@@ -34,6 +34,10 @@
+ use crate::window_change_detector::WindowChangeDetector;
+ use core_foundation::base::{CFRelease, CFTypeRef, TCFType};
+ 
++#[path = "click_timeout.rs"]
++mod click_timeout;
++use click_timeout::{ax_dispatch_error, ax_error_result, press_error_may_have_acted};
++
+ use super::pixel_route::PixelClickRoute;
+ use super::ToolState;
+ 
+@@ -139,19 +143,6 @@
+     ax_action == "AXPress"
+         && matches!(role, "AXRadioButton" | "AXCheckBox")
+         && advertised.iter().any(|action| action == "AXPress")
+-}
+-
+-/// AX errors that AppKit apps return from a press they performed (#3835).
+-/// Errors that mean the request never reached the app (illegal argument,
+-/// invalid element, cannot complete, API disabled) are not among them.
+-fn press_error_may_have_acted(err: crate::ax::bindings::AXError) -> bool {
+-    use crate::ax::bindings::{
+-        kAXErrorActionUnsupported, kAXErrorAttributeUnsupported, kAXErrorFailure,
+-    };
+-    matches!(
+-        err,
+-        kAXErrorFailure | kAXErrorAttributeUnsupported | kAXErrorActionUnsupported
+-    )
+ }
+ 
+ /// Whether a toggle's value moving from `before` to `now` is what pressing it
+@@ -940,7 +931,7 @@
+                     }
+                     ToolResult::text(msg).with_structured(structured)
+                 }
+-                Ok(Err(e)) => ToolResult::error(format!("AX action failed: {e}")),
++                Ok(Err(e)) => ax_error_result(e),
+                 Err(e) => ToolResult::error(format!("Task error: {e}")),
+             }
+         } else if let (Some(mut cx), Some(mut cy)) = (x, y) {
+@@ -1193,17 +1184,18 @@
+                         return Ok(false);
+                     }
+                     let delivered = if focus_only {
+-                        crate::input::ax_actions::focus_element(element as usize).is_ok()
++                        Ok(crate::input::ax_actions::focus_element(element as usize).is_ok())
+                     } else {
+                         let press = core_foundation::string::CFString::new("AXPress");
+-                        AXUIElementPerformAction(element, press.as_concrete_TypeRef())
+-                            == kAXErrorSuccess
++                        let error = AXUIElementPerformAction(element, press.as_concrete_TypeRef());
++                        ax_dispatch_error("AXPress", error, false, || error == kAXErrorSuccess)
+                     };
+                     CFRelease(element as _);
+-                    Ok(delivered)
++                    delivered
+                 })
+                 .await;
+                 match ax_result {
++                    Ok(Err(error)) => return ax_error_result(error),
+                     Ok(Ok(true)) => {
+                         crate::cursor::overlay::send_command(
+                             cursor_key.clone(),
+@@ -1229,12 +1221,6 @@
+                         .with_structured(serde_json::json!({
+                             "code": "background_unavailable"
+                         }));
+-                    }
+-                    Ok(Err(error)) if focus_only => {
+-                        return ToolResult::error(format!("Background PX focus failed: {error}"))
+-                            .with_structured(serde_json::json!({
+-                                "code": "background_unavailable"
+-                            }));
+                     }
+                     _ => {}
+                 }
+@@ -1722,7 +1708,8 @@
+     if err != crate::ax::bindings::kAXErrorSuccess {
+         // Checked before the row-selection fallback, which writes AXSelected
+         // on an ancestor: a toggle whose press landed needs no other write.
+-        if let Some(before) = toggle_before.filter(|_| press_error_may_have_acted(err)) {
++        if let Some(before) = toggle_before.filter(|_| press_error_may_have_acted(err, foreground))
++        {
+             if let Some(now) = settled_value(
+                 |now| toggle_press_shows(&role, &before, now),
+                 read_value,
+@@ -1743,24 +1730,26 @@
+                 ));
+             }
+         }
+-        // Some collection rows claim a click-like action but Finder returns
+-        // kAXErrorCannotComplete. Use the same verified selection fallback
+-        // before surfacing the dispatch error.
+-        if ax_action == "AXPress" && modifiers.is_empty() {
+-            if let Some(selected_role) =
++        // A background timeout can follow an executed press. Do not append
++        // another mutation unless the dispatch error proves it is safe.
++        let selected_role = ax_dispatch_error(ax_action, err, foreground, || {
++            if ax_action == "AXPress" && modifiers.is_empty() {
+                 crate::input::ax_actions::select_nearest_container(element_ptr)
+-            {
+-                return Ok((
+-                    format!(
+-                        "✅ Selected nearest {selected_role} for [{idx}] {role} \"{title}\" \
++            } else {
++                None
++            }
++        })?;
++        if let Some(selected_role) = selected_role {
++            return Ok((
++                format!(
++                    "✅ Selected nearest {selected_role} for [{idx}] {role} \"{title}\" \
+                          after AXPress returned {err}; confirmed AXSelected=true."
+-                    ),
+-                    false,
+-                    false,
+-                    true,
+-                    false,
+-                ));
+-            }
++                ),
++                false,
++                false,
++                true,
++                false,
++            ));
+         }
+         anyhow::bail!("AXUIElementPerformAction({ax_action}) returned {err}");
+     }
+@@ -1971,18 +1960,6 @@
+             !is_toggle_press("AXPress", "AXRadioButton", &[]),
+             "AXPress not advertised"
+         );
+-    }
+-
+-    /// Only errors an app returns after acting qualify; errors that mean the
+-    /// request never reached the app keep failing (#3835).
+-    #[test]
+-    fn only_errors_an_app_returns_after_acting_qualify() {
+-        assert!(press_error_may_have_acted(-25200));
+-        assert!(press_error_may_have_acted(-25205));
+-        assert!(press_error_may_have_acted(-25206));
+-        for refused in [-25201, -25202, -25204, -25211] {
+-            assert!(!press_error_may_have_acted(refused), "{refused}");
+-        }
+     }
+ 
+     /// A checkbox press shows as any state change; a radio press only as the
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/click_timeout.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/click_timeout.rs
+new file mode 100644
+--- /dev/null
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/click_timeout.rs
+@@ -0,0 +1,161 @@
++//! A background AX timeout is an uncertain dispatch, not permission to mutate again.
++use cua_driver_core::protocol::ToolResult;
++
++pub(super) fn press_error_may_have_acted(error: i32, foreground: bool) -> bool {
++    use crate::ax::bindings::{
++        kAXErrorActionUnsupported, kAXErrorAttributeUnsupported, kAXErrorFailure,
++    };
++    [
++        kAXErrorFailure,
++        kAXErrorAttributeUnsupported,
++        kAXErrorActionUnsupported,
++    ]
++    .contains(&error)
++        || (error == -25204 && !foreground)
++}
++
++#[derive(Debug)]
++struct UncertainAxDispatch(String);
++
++impl std::fmt::Display for UncertainAxDispatch {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        write!(f, "{}", self.0)
++    }
++}
++
++impl std::error::Error for UncertainAxDispatch {}
++
++pub(super) fn ax_dispatch_error<T>(
++    action: &str,
++    error: i32,
++    foreground: bool,
++    fallback: impl FnOnce() -> T,
++) -> anyhow::Result<T> {
++    if error == -25204 && !foreground {
++        return Err(UncertainAxDispatch(action.to_owned()).into());
++    }
++    Ok(fallback())
++}
++
++pub(super) fn ax_error_result(error: anyhow::Error) -> ToolResult {
++    if let Some(dispatch) = error.downcast_ref::<UncertainAxDispatch>() {
++        return ToolResult::text(format!(
++            "macOS could not complete {} (-25204). The action may have occurred; inspect fresh state before repeating it.",
++            dispatch.0
++        ))
++        .with_structured(serde_json::json!({"path":"ax", "effect":"unverifiable", "verified":false}));
++    }
++    ToolResult::error(format!("AX action failed: {error}"))
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use cua_driver_core::{
++        authorization::PermissionMode,
++        session_authorization::{SessionAuthorizationRegistry, SessionModeCeiling},
++        tool::{Tool, ToolDef, ToolRegistry},
++    };
++    use std::{
++        sync::{
++            atomic::{AtomicUsize, Ordering},
++            Arc,
++        },
++        time::Duration,
++    };
++
++    #[test]
++    fn background_timeout_never_runs_the_selection_fallback() {
++        assert!(press_error_may_have_acted(-25204, false));
++        assert!(!press_error_may_have_acted(-25204, true));
++        let error =
++            ax_dispatch_error("AXPress", -25204, false, || panic!("second mutation")).unwrap_err();
++        let result = ax_error_result(error);
++        assert_ne!(result.is_error, Some(true));
++        assert_eq!(result.structured_content.unwrap()["effect"], "unverifiable");
++    }
++
++    #[test]
++    fn foreground_timeout_and_other_errors_keep_existing_policy() {
++        for (error, foreground) in [(-25204, true), (-25202, false)] {
++            assert_eq!(
++                ax_dispatch_error("AXPress", error, foreground, || "fallback").unwrap(),
++                "fallback"
++            );
++        }
++        for error in [-25200, -25205, -25206] {
++            assert!(press_error_may_have_acted(error, false));
++            assert!(press_error_may_have_acted(error, true));
++        }
++        for error in [-25201, -25202, -25211] {
++            assert!(!press_error_may_have_acted(error, false));
++        }
++        assert_eq!(
++            ax_error_result(anyhow::anyhow!("ordinary failure")).is_error,
++            Some(true)
++        );
++    }
++
++    struct TimeoutTool {
++        definition: ToolDef,
++        calls: Arc<AtomicUsize>,
++    }
++
++    #[async_trait::async_trait]
++    impl Tool for TimeoutTool {
++        fn def(&self) -> &ToolDef {
++            &self.definition
++        }
++        async fn invoke(&self, _: serde_json::Value) -> ToolResult {
++            self.calls.fetch_add(1, Ordering::SeqCst);
++            ax_error_result(
++                ax_dispatch_error("AXPress", -25204, false, || panic!("second input")).unwrap_err(),
++            )
++        }
++    }
++
++    #[tokio::test]
++    async fn public_dispatch_preserves_uncertainty_without_replaying() {
++        let ceiling = SessionModeCeiling::for_trusted_sessions(
++            [PermissionMode::Standard],
++            false,
++            Duration::from_secs(60),
++            Duration::from_secs(30),
++        )
++        .unwrap();
++        let context = SessionAuthorizationRegistry::with_ceiling(ceiling)
++            .compatibility_context(PermissionMode::Standard, None)
++            .unwrap();
++        let session = context.runtime_session_key("timeout-fixture");
++        let mut registry = ToolRegistry::new();
++        registry
++            .protected_resource_ownership()
++            .mark_driver_owned_pid(&session, 42);
++        let calls = Arc::new(AtomicUsize::new(0));
++        registry.register(Box::new(TimeoutTool {
++            definition: ToolDef {
++                name: "click".into(),
++                description: "fixture".into(),
++                input_schema: serde_json::json!({"type":"object"}),
++                read_only: false,
++                destructive: false,
++                idempotent: false,
++                open_world: false,
++            },
++            calls: calls.clone(),
++        }));
++        let result = registry.invoke_with_context("click", serde_json::json!({
++            "pid":42, "window_id":7, "element_token":"s00000001:1", "session":"timeout-fixture"
++        }), context).await;
++        assert_ne!(result.is_error, Some(true));
++        let result = result.structured_content.unwrap();
++        assert_eq!(result["effect"], "unverifiable");
++        assert!(result["summary"]
++            .as_str()
++            .unwrap()
++            .contains("inspect fresh state"));
++        assert_eq!(result["next_call"]["tool"], "get_window_state");
++        assert!(result.get("error").is_none());
++        assert_eq!(calls.load(Ordering::SeqCst), 1);
++    }
++}
