@@ -1,8 +1,14 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::TryRngCore;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 pub(crate) mod computer_use_settings;
+mod event_stream;
+#[cfg(test)]
+mod history_decode_tests;
+mod http_response;
+use event_stream::{EventCursor, EventRead, EventStreamError};
+use http_response::MAX_BRIDGE_HTTP_RESPONSE_BYTES;
 #[cfg(any(debug_assertions, test))]
 use std::{
     env,
@@ -10,7 +16,7 @@ use std::{
 };
 use std::{
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufReader, Read, Write},
     net::{IpAddr, SocketAddr, TcpStream},
     path::{Path, PathBuf},
     sync::{
@@ -37,8 +43,6 @@ const READY_TIMEOUT: Duration = Duration::from_secs(5);
 const STOP_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_SHADOW_SESSIONS: usize = 10_000;
 const MAX_PENDING_DELETE_PAGE_SIZE: usize = 200;
-const MAX_BRIDGE_RESPONSE_BODY_BYTES: usize = 32 * 1024 * 1024;
-const MAX_BRIDGE_HTTP_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
 pub const PROTOCOL_VERSION: u8 = 1;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -2715,9 +2719,7 @@ impl BridgeSupervisor {
     pub fn history(&self, request: SessionRequest) -> Result<BridgeHistory, String> {
         let session_id = session_path_component(&request.session_id)?;
         let path = format!("/v1/sessions/{session_id}/history");
-        let response = self.request_json("GET", &path, None, None)?;
-        let envelope: BridgeHistoryResponse =
-            serde_json::from_value(response).map_err(display_error)?;
+        let envelope: BridgeHistoryResponse = self.request_json_as("GET", &path, None, None)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
@@ -4069,7 +4071,12 @@ impl BridgeSupervisor {
         }
         let request_id = opaque_secret()?;
         let path = format!("/v1/sessions/{session_id}:steer");
-        let response = self.request_session("POST", &path, Some(json!({"input": request.input})), Some(&request_id))?;
+        let response = self.request_session(
+            "POST",
+            &path,
+            Some(json!({"input": request.input})),
+            Some(&request_id),
+        )?;
         if response.session.id != session_id {
             return Err("invalid steering owner".into());
         }
@@ -4619,19 +4626,39 @@ impl BridgeSupervisor {
         Ok(envelope)
     }
 
-    pub fn fork_session(&self, request: ForkSessionRequest) -> Result<BridgeLegacyConversationForkResultResponse, String> {
+    pub fn fork_session(
+        &self,
+        request: ForkSessionRequest,
+    ) -> Result<BridgeLegacyConversationForkResultResponse, String> {
         let session_id = session_path_component(&request.session_id)?;
         let request_id = opaque_secret()?;
         let path = format!("/v1/sessions/{session_id}:fork");
-        if request.fork_token.len() != 64 || !request.fork_token.bytes().all(|value| value.is_ascii_hexdigit()) {
+        if request.fork_token.len() != 64
+            || !request
+                .fork_token
+                .bytes()
+                .all(|value| value.is_ascii_hexdigit())
+        {
             return Err("分叉位置无效，请重新打开对话后重试".to_string());
         }
-        let response = self.request_json("POST", &path, Some(json!({"forkToken": request.fork_token})), Some(&request_id))?;
-        let envelope: BridgeLegacyConversationForkResultResponse = serde_json::from_value(response).map_err(display_error)?;
+        let response = self.request_json(
+            "POST",
+            &path,
+            Some(json!({"forkToken": request.fork_token})),
+            Some(&request_id),
+        )?;
+        let envelope: BridgeLegacyConversationForkResultResponse =
+            serde_json::from_value(response).map_err(display_error)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
         }
-        if envelope.result.ok && (envelope.result.session_id.as_ref().is_none_or(|id| id == &request.session_id || session_path_component(id).is_err())) {
+        if envelope.result.ok
+            && (envelope
+                .result
+                .session_id
+                .as_ref()
+                .is_none_or(|id| id == &request.session_id || session_path_component(id).is_err()))
+        {
             return Err("desktop bridge returned an invalid fork session identity".to_string());
         }
         Ok(envelope)
@@ -4805,17 +4832,27 @@ impl BridgeSupervisor {
         body: Option<Value>,
         request_id: Option<&str>,
     ) -> Result<Value, String> {
+        self.request_json_as(method, path, body, request_id)
+    }
+
+    fn request_json_as<T: DeserializeOwned>(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<Value>,
+        request_id: Option<&str>,
+    ) -> Result<T, String> {
         // Snapshot the owned connection under the process lock, then release it
         // before blocking I/O. Session restoration must not block status/event
         // connections or shutdown for the duration of core initialization.
         let (address, token) = self.event_connection()?;
-        request_json(address, &token, method, path, body.clone(), request_id)
+        request_json_as(address, &token, method, path, body.clone(), request_id)
             // The Go bridge caches this request ID before a turn is admitted. If
             // the host lost the first response after sending it, one same-ID retry
             // is safe; it replays the response instead of submitting twice.
             .or_else(|first_error| match request_id {
                 Some(request_id) => {
-                    request_json(address, &token, method, path, body, Some(request_id))
+                    request_json_as(address, &token, method, path, body, Some(request_id))
                         .map_err(|_| first_error)
                 }
                 None => Err(first_error),
@@ -5152,6 +5189,26 @@ fn request_json(
     )
 }
 
+fn request_json_as<T: DeserializeOwned>(
+    address: SocketAddr,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+    request_id: Option<&str>,
+) -> Result<T, String> {
+    request_json_with_connected_socket_as(
+        address,
+        token,
+        method,
+        path,
+        body,
+        request_id,
+        bridge_request_timeout(path),
+        |_| Ok(()),
+    )
+}
+
 fn bridge_request_timeout(path: &str) -> Duration {
     match path {
         path if path.ends_with(":fork") => Duration::from_secs(120),
@@ -5162,8 +5219,9 @@ fn bridge_request_timeout(path: &str) -> Duration {
         // These Go handlers allow twenty seconds for an upstream provider.
         // Leave time for the handler to return its result instead of timing
         // out a healthy model at the ordinary local-RPC budget.
-        "/v1/settings/provider-model-probe"
-        | "/v1/settings/provider-configs/discover-models" => Duration::from_secs(25),
+        "/v1/settings/provider-model-probe" | "/v1/settings/provider-configs/discover-models" => {
+            Duration::from_secs(25)
+        }
         _ => Duration::from_secs(2),
     }
 }
@@ -5211,6 +5269,29 @@ pub(crate) fn request_json_with_connected_socket<G>(
     read_timeout: Duration,
     connected: impl FnOnce(&TcpStream) -> Result<G, String>,
 ) -> Result<Value, String> {
+    request_json_with_connected_socket_as(
+        address,
+        token,
+        method,
+        path,
+        body,
+        request_id,
+        read_timeout,
+        connected,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn request_json_with_connected_socket_as<T: DeserializeOwned, G>(
+    address: SocketAddr,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: Option<Value>,
+    request_id: Option<&str>,
+    read_timeout: Duration,
+    connected: impl FnOnce(&TcpStream) -> Result<G, String>,
+) -> Result<T, String> {
     let bytes = body
         .map(|value| serde_json::to_vec(&value))
         .transpose()
@@ -5234,7 +5315,7 @@ pub(crate) fn request_json_with_connected_socket<G>(
         .map_err(bridge_io_error)?;
     stream.write_all(body).map_err(bridge_io_error)?;
     let response = read_bounded_response(stream, MAX_BRIDGE_HTTP_RESPONSE_BYTES)?;
-    parse_json_response(&response)
+    http_response::parse_json_response_as(&response, crate::speech_input::safe_speech_error)
 }
 
 fn read_bounded_response(reader: impl Read, max_bytes: usize) -> Result<Vec<u8>, String> {
@@ -5249,199 +5330,9 @@ fn read_bounded_response(reader: impl Read, max_bytes: usize) -> Result<Vec<u8>,
     Ok(response)
 }
 
+#[cfg(test)]
 fn parse_json_response(response: &[u8]) -> Result<Value, String> {
-    if response.len() > MAX_BRIDGE_HTTP_RESPONSE_BYTES {
-        return Err("desktop bridge response exceeds the size limit".to_string());
-    }
-    let boundary = b"\r\n\r\n";
-    let Some(index) = response
-        .windows(boundary.len())
-        .position(|window| window == boundary)
-    else {
-        return Err("desktop bridge returned an invalid HTTP response".to_string());
-    };
-    let headers = std::str::from_utf8(&response[..index]).map_err(display_error)?;
-    let status = headers
-        .lines()
-        .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .and_then(|value| value.parse::<u16>().ok())
-        .ok_or_else(|| "desktop bridge returned an invalid HTTP status".to_string())?;
-    let body = &response[index + boundary.len()..];
-    let transfer_encoding = headers.lines().skip(1).find_map(|line| {
-        let (name, value) = line.split_once(':')?;
-        name.trim()
-            .eq_ignore_ascii_case("transfer-encoding")
-            .then_some(value.trim())
-    });
-    let decoded_body = transfer_encoding
-        .map(|encoding| {
-            if encoding.eq_ignore_ascii_case("chunked") {
-                decode_chunked_body(body)
-            } else {
-                Err("desktop bridge returned an unsupported transfer encoding".to_string())
-            }
-        })
-        .transpose()?;
-    if transfer_encoding.is_none() && body.len() > MAX_BRIDGE_RESPONSE_BODY_BYTES {
-        return Err("desktop bridge response exceeds the size limit".to_string());
-    }
-    let raw = decoded_body.as_deref().unwrap_or(body);
-    if !(200..300).contains(&status) {
-        if let Ok(parsed) = serde_json::from_slice::<Value>(first_json_value(raw)) {
-            if let Some(code) = parsed.pointer("/error/code").and_then(Value::as_str) {
-                if let Some(message) = crate::speech_input::safe_speech_error(status, code) {
-                    return Err(message);
-                }
-            }
-        }
-        // Remote bootstrap explicitly publishes a bounded, credential-redacted
-        // diagnostic. This exception must not expose other endpoints' messages.
-        if status == 502 {
-            if let Ok(parsed) = serde_json::from_slice::<Value>(first_json_value(raw)) {
-                if parsed.pointer("/error/code").and_then(Value::as_str)
-                    == Some("remote_serve_start_failed")
-                {
-                    if let Some(detail) = parsed.pointer("/error/detail").and_then(Value::as_str) {
-                        if !detail.trim().is_empty() && detail.chars().count() <= 2049 {
-                            return Err(format!(
-                                "desktop bridge request failed with status 502 (remote_serve_start_failed): {}",
-                                detail.trim()
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        // Carry only a small allowlist of recovery codes across the Tauri
-        // String error boundary. Never forward the bridge's free-text message:
-        // it may contain a private transcript or workspace path.
-        if matches!(status, 400 | 404 | 409 | 422 | 429 | 503) {
-            let parsed = serde_json::from_slice::<Value>(first_json_value(raw)).ok();
-            let code = parsed
-                .as_ref()
-                .and_then(|value| value.pointer("/error/code"))
-                .and_then(Value::as_str);
-            let allowed = matches!(
-                (status, code),
-                (
-                    409,
-                    Some(
-                        "session_missing"
-                            | "session_deleting"
-                            | "session_deleted"
-                            | "resync_required"
-                            | "workspace_file_ambiguous"
-                            | "terminal_busy"
-                            | "settings_apply_failed"
-                            | "steer_unavailable",
-                    ),
-                ) | (400, Some("terminal_invalid_request" | "model_unavailable"))
-                    | (404, Some("workspace_file_not_found" | "terminal_not_found"))
-                    | (422, Some("workspace_file_unavailable"))
-                    | (503, Some("terminal_unavailable"))
-                    | (429, Some("runtime_capacity"))
-            );
-            if allowed {
-                let code = code.unwrap();
-                return Err(format!(
-                    "desktop bridge request failed with status {status} ({code})"
-                ));
-            }
-        }
-        return Err(format!(
-            "desktop bridge request failed with status {status}"
-        ));
-    }
-    // Some local proxies prepend diagnostics or append a separator after the
-    // JSON body. Extract exactly the first balanced object/array so neither
-    // form produces serde_json's misleading "trailing characters" error.
-    serde_json::from_slice(first_json_value(raw)).map_err(display_error)
-}
-
-fn first_json_value(raw: &[u8]) -> &[u8] {
-    let Some(start) = raw.iter().position(|&b| b == b'{' || b == b'[') else {
-        return raw;
-    };
-    let mut depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
-    for (offset, &byte) in raw[start..].iter().enumerate() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == b'"' {
-                in_string = false;
-            }
-            continue;
-        }
-        match byte {
-            b'"' => in_string = true,
-            b'{' | b'[' => depth += 1,
-            b'}' | b']' => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    return &raw[start..=start + offset];
-                }
-            }
-            _ => {}
-        }
-    }
-    &raw[start..]
-}
-
-fn decode_chunked_body(mut body: &[u8]) -> Result<Vec<u8>, String> {
-    let mut decoded = Vec::new();
-    loop {
-        let line_end = body
-            .windows(2)
-            .position(|window| window == b"\r\n")
-            .ok_or_else(|| "desktop bridge returned an invalid chunked response".to_string())?;
-        let line = std::str::from_utf8(&body[..line_end]).map_err(display_error)?;
-        let size = usize::from_str_radix(line.split(';').next().unwrap_or_default().trim(), 16)
-            .map_err(display_error)?;
-        body = &body[line_end + 2..];
-
-        if size == 0 {
-            loop {
-                let trailer_end = body
-                    .windows(2)
-                    .position(|window| window == b"\r\n")
-                    .ok_or_else(|| {
-                        "desktop bridge returned an invalid chunked response trailer".to_string()
-                    })?;
-                let trailer = &body[..trailer_end];
-                body = &body[trailer_end + 2..];
-                if trailer.is_empty() {
-                    if !body.is_empty() {
-                        return Err(
-                            "desktop bridge returned data after the chunked response".to_string()
-                        );
-                    }
-                    return Ok(decoded);
-                }
-                if !trailer.contains(&b':') {
-                    return Err(
-                        "desktop bridge returned an invalid chunked response trailer".to_string(),
-                    );
-                }
-            }
-        }
-
-        if decoded.len().saturating_add(size) > MAX_BRIDGE_RESPONSE_BODY_BYTES {
-            return Err("desktop bridge response exceeds the size limit".to_string());
-        }
-        let chunk_end = size
-            .checked_add(2)
-            .ok_or_else(|| "desktop bridge returned an invalid chunk size".to_string())?;
-        if body.len() < chunk_end || body.get(size..chunk_end) != Some(&b"\r\n"[..]) {
-            return Err("desktop bridge returned an invalid chunked response".to_string());
-        }
-        decoded.extend_from_slice(&body[..size]);
-        body = &body[chunk_end..];
-    }
+    http_response::parse_json_response_as(response, crate::speech_input::safe_speech_error)
 }
 
 fn validate_workspace_target(
@@ -5744,57 +5635,80 @@ fn forward_events(
     app: tauri::AppHandle,
     address: SocketAddr,
     token: String,
-    mut after_sequence: u64,
+    after_sequence: u64,
     stop: Arc<AtomicBool>,
 ) {
+    let cancelled = || stop.load(Ordering::Acquire);
     let cursor_stream = crate::computer_use_cursor::begin_stream(&app, after_sequence);
+    let mut cursor = EventCursor::new(after_sequence);
     let mut disconnected = false;
     let mut connected_once = false;
-    while !stop.load(Ordering::Acquire) {
-        match open_event_stream(address, &token, after_sequence) {
+    while !cancelled() {
+        let connection =
+            open_event_stream_cancellable(address, &token, cursor.after_sequence(), &cancelled);
+        if cancelled() {
+            return;
+        }
+        match connection {
             Ok(mut reader) => {
-                if stop.load(Ordering::Acquire) {
-                    break;
-                }
                 if !connected_once || disconnected {
+                    if cancelled() {
+                        return;
+                    }
                     let _ = app.emit("bridge:connection-restored", ());
                 }
                 connected_once = true;
                 disconnected = false;
-                while !stop.load(Ordering::Acquire) {
-                    let mut line = String::new();
-                    match reader.read_line(&mut line) {
-                        Ok(0) | Err(_) => break,
-                        Ok(_) => {
-                            let Some(data) = line.strip_prefix("data: ") else {
-                                continue;
-                            };
-                            let Ok(event) = serde_json::from_str::<BridgeEvent>(data.trim_end())
-                            else {
-                                continue;
-                            };
-                            if event.protocol_version != u64::from(PROTOCOL_VERSION) {
-                                continue;
-                            }
-                            after_sequence = after_sequence.max(event.sequence);
+                while !cancelled() {
+                    match cursor
+                        .next_cancellable(&mut reader, &cancelled)
+                        .if_active(&cancelled)
+                    {
+                        EventRead::Event(event) => {
                             if let Some(terminal) = crate::terminal::terminal_event(&event) {
                                 if let Ok(terminal) = terminal {
+                                    if cancelled() {
+                                        return;
+                                    }
                                     let _ = app.emit_to("main", "bridge:terminal-event", terminal);
                                 }
                                 continue;
                             }
+                            if cancelled() {
+                                return;
+                            }
                             crate::computer_use_cursor::observe(&app, &event, cursor_stream);
+                            if cancelled() {
+                                return;
+                            }
                             let _ = app.emit("bridge:event", event);
                         }
+                        EventRead::Ignored => continue,
+                        EventRead::Reconnect => break,
+                        EventRead::ResyncRequired => {
+                            if cancelled() {
+                                return;
+                            }
+                            let _ = app.emit("bridge:resync-required", ());
+                            return; // A fresh snapshot owns the next subscription.
+                        }
+                        EventRead::Stopped => return,
                     }
                 }
             }
+            Err(EventStreamError::Cancelled) => return,
             Err(EventStreamError::ResyncRequired) => {
+                if cancelled() {
+                    return;
+                }
                 let _ = app.emit("bridge:resync-required", ());
                 break;
             }
             Err(EventStreamError::Unavailable) => {
                 if !disconnected {
+                    if cancelled() {
+                        return;
+                    }
                     let _ = app.emit(
                         "bridge:connection-error",
                         "bridge event stream is unavailable",
@@ -5803,56 +5717,55 @@ fn forward_events(
                 }
             }
         }
-        if !stop.load(Ordering::Acquire) {
+        if !cancelled() {
             thread::sleep(Duration::from_millis(100));
         }
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum EventStreamError {
-    ResyncRequired,
-    Unavailable,
-}
-
+#[cfg(test)]
 fn open_event_stream(
     address: SocketAddr,
     token: &str,
     after_sequence: u64,
 ) -> Result<BufReader<TcpStream>, EventStreamError> {
+    open_event_stream_cancellable(address, token, after_sequence, &|| false)
+}
+
+fn open_event_stream_cancellable(
+    address: SocketAddr,
+    token: &str,
+    after_sequence: u64,
+    cancelled: &impl Fn() -> bool,
+) -> Result<BufReader<TcpStream>, EventStreamError> {
+    if cancelled() {
+        return Err(EventStreamError::Cancelled);
+    }
     let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(1))
         .map_err(|_| EventStreamError::Unavailable)?;
+    if cancelled() {
+        return Err(EventStreamError::Cancelled);
+    }
     stream
         .set_read_timeout(Some(Duration::from_secs(1)))
         .map_err(|_| EventStreamError::Unavailable)?;
     stream
+        .set_write_timeout(Some(Duration::from_secs(1)))
+        .map_err(|_| EventStreamError::Unavailable)?;
+    // Close-delimited HTTP/1.0 keeps HTTP chunk framing out of the SSE parser.
+    stream
         .write_all(
             format!(
-                "GET /v1/events?afterSequence={after_sequence} HTTP/1.1\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nAccept: text/event-stream\r\nConnection: keep-alive\r\n\r\n"
+                "GET /v1/events?afterSequence={after_sequence} HTTP/1.0\r\nHost: {address}\r\nAuthorization: Bearer {token}\r\nAccept: text/event-stream\r\nConnection: close\r\n\r\n"
             )
             .as_bytes(),
         )
         .map_err(|_| EventStreamError::Unavailable)?;
+    if cancelled() {
+        return Err(EventStreamError::Cancelled);
+    }
     let mut reader = BufReader::new(stream);
-    let mut status = String::new();
-    reader
-        .read_line(&mut status)
-        .map_err(|_| EventStreamError::Unavailable)?;
-    if status.starts_with("HTTP/1.1 409") {
-        return Err(EventStreamError::ResyncRequired);
-    }
-    if !status.starts_with("HTTP/1.1 200") {
-        return Err(EventStreamError::Unavailable);
-    }
-    loop {
-        let mut header = String::new();
-        reader
-            .read_line(&mut header)
-            .map_err(|_| EventStreamError::Unavailable)?;
-        if header == "\r\n" || header.is_empty() {
-            break;
-        }
-    }
+    event_stream::read_headers_cancellable(&mut reader, cancelled)?;
     Ok(reader)
 }
 
@@ -7040,9 +6953,16 @@ mod tests {
             assert!(error.contains(expected));
             assert!(!error.contains("SECRET") && !error.contains("/private"));
         }
-        for (status, code) in [(502,"speech_tts_arbitrary"),(500,"speech_tts_auth"),(502,"unexpected")] {
+        for (status, code) in [
+            (502, "speech_tts_arbitrary"),
+            (500, "speech_tts_auth"),
+            (502, "unexpected"),
+        ] {
             let response = format!("HTTP/1.1 {status} Error\r\n\r\n{{\"error\":{{\"code\":\"{code}\",\"message\":\"SECRET\"}}}}");
-            assert_eq!(parse_json_response(response.as_bytes()).unwrap_err(),format!("desktop bridge request failed with status {status}"));
+            assert_eq!(
+                parse_json_response(response.as_bytes()).unwrap_err(),
+                format!("desktop bridge request failed with status {status}")
+            );
         }
     }
 
@@ -7090,24 +7010,40 @@ mod tests {
         assert_eq!(parse_json_response(response).unwrap_err(), "desktop bridge request failed with status 502 (remote_serve_start_failed): bootstrap: npm: command not found\nno local CLI");
         for (status, code, detail) in [
             (502, "other", "private diagnostic".to_string()),
-            (500, "remote_serve_start_failed", "private diagnostic".to_string()),
+            (
+                500,
+                "remote_serve_start_failed",
+                "private diagnostic".to_string(),
+            ),
             (502, "remote_serve_start_failed", "".to_string()),
             (502, "remote_serve_start_failed", "x".repeat(2050)),
         ] {
             let body = json!({"error":{"code":code,"message":"private message","detail":detail}});
             let response = format!("HTTP/1.1 {status} Error\r\n\r\n{body}");
-            assert_eq!(parse_json_response(response.as_bytes()).unwrap_err(), format!("desktop bridge request failed with status {status}"));
+            assert_eq!(
+                parse_json_response(response.as_bytes()).unwrap_err(),
+                format!("desktop bridge request failed with status {status}")
+            );
         }
         let missing = b"HTTP/1.1 502 Error\r\n\r\n{\"error\":{\"code\":\"remote_serve_start_failed\",\"message\":\"private message\"}}";
-        assert_eq!(parse_json_response(missing).unwrap_err(), "desktop bridge request failed with status 502");
+        assert_eq!(
+            parse_json_response(missing).unwrap_err(),
+            "desktop bridge request failed with status 502"
+        );
     }
 
     #[test]
     fn response_parser_preserves_runtime_capacity_without_private_details() {
         let response = b"HTTP/1.1 429 Error\r\n\r\n{\"error\":{\"code\":\"runtime_capacity\",\"message\":\"private-session-and-path\"}}";
-        assert_eq!(parse_json_response(response).unwrap_err(), "desktop bridge request failed with status 429 (runtime_capacity)");
+        assert_eq!(
+            parse_json_response(response).unwrap_err(),
+            "desktop bridge request failed with status 429 (runtime_capacity)"
+        );
         let unknown = b"HTTP/1.1 429 Error\r\n\r\n{\"error\":{\"code\":\"other\",\"message\":\"private-session-and-path\"}}";
-        assert_eq!(parse_json_response(unknown).unwrap_err(), "desktop bridge request failed with status 429");
+        assert_eq!(
+            parse_json_response(unknown).unwrap_err(),
+            "desktop bridge request failed with status 429"
+        );
     }
 
     #[test]
@@ -7427,10 +7363,16 @@ mod tests {
             ),
             project.canonicalize().unwrap()
         );
-        assert!(
-            supervisor.workspace_target(&session.id).is_err(),
-            "old session cannot expose the new runtime path"
+        // Navigation selects another slot; the background owner remains valid
+        // and must resolve its own Global directory, never the selected project.
+        let previous_target = supervisor.workspace_target(&session.id).unwrap();
+        assert_eq!(previous_target.session_id, session.id);
+        assert_eq!(previous_target.workspace_root, target.workspace_root);
+        assert_ne!(
+            Path::new(&previous_target.workspace_root),
+            project.canonicalize().unwrap()
         );
+        assert!(supervisor.workspace_target("unowned").is_err());
         supervisor.stop().unwrap();
         supervisor.start().unwrap();
         supervisor.open_session(global).unwrap();
@@ -7450,6 +7392,10 @@ mod tests {
             return;
         };
         let _env = crate::test_env::guard();
+        let home = tempfile::tempdir().expect("isolated supervisor profile");
+        env::set_var("REASONIX_HOME", home.path());
+        env::set_var("REASONIX_STATE_HOME", home.path());
+        env::set_var("REASONIX_CACHE_HOME", home.path());
         let supervisor = BridgeSupervisor::with_binary(binary);
         let status = supervisor.start().expect("start bridge");
         assert!(status.running);
@@ -7681,6 +7627,10 @@ mod tests {
             return;
         };
         let _env = crate::test_env::guard();
+        let home = tempfile::tempdir().expect("isolated supervisor profile");
+        env::set_var("REASONIX_HOME", home.path());
+        env::set_var("REASONIX_STATE_HOME", home.path());
+        env::set_var("REASONIX_CACHE_HOME", home.path());
         let supervisor = BridgeSupervisor::with_binary(binary);
         assert!(supervisor.start().expect("start bridge").running);
         {

@@ -35,6 +35,7 @@ type liveCheckpoint struct {
 	view     LiveState
 	runes    int
 	sequence uint64
+	answer   strings.Builder
 }
 
 func emptyLiveState() LiveState {
@@ -86,6 +87,7 @@ func (s *EventStream) advanceLive(published Event) {
 	case "turn_done":
 		checkpoint.view.Active = false
 		checkpoint.view.Answer = LiveAnswer{Segments: []string{}}
+		checkpoint.answer.Reset()
 		checkpoint.view.Progress.Phase = "finishing"
 	case "reasoning":
 		checkpoint.view.Progress.Phase = "thinking"
@@ -106,7 +108,11 @@ func (s *EventStream) advanceLive(published Event) {
 		if len(checkpoint.view.Answer.Segments) == 0 {
 			checkpoint.view.Answer.Segments = []string{""}
 		}
-		checkpoint.view.Answer.Segments[0] += delta
+		// Append once instead of copying the complete answer for every token.
+		// Builder strings remain immutable when later deltas append or reset;
+		// LiveSnapshot separately copies the public segment slice.
+		checkpoint.answer.WriteString(delta)
+		checkpoint.view.Answer.Segments[0] = checkpoint.answer.String()
 		checkpoint.runes += utf8.RuneCountInString(delta)
 		checkpoint.view.Answer.Streaming = true
 		checkpoint.view.Progress.Phase = "answering"
@@ -152,6 +158,7 @@ func (s *EventStream) advanceLive(published Event) {
 		checkpoint.view.Progress.Phase = phase
 		if published.EventKind == "tool_dispatch" {
 			checkpoint.view.Answer = LiveAnswer{Segments: []string{}}
+			checkpoint.answer.Reset()
 			checkpoint.runes = 0
 			checkpoint.view.Truncated = false
 		}

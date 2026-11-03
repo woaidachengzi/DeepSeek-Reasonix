@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -104,8 +105,18 @@ func awaitParallelState(t *testing.T, pool *desktopbridge.RuntimePool, id string
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		if view, ok := pool.CommandSessionSnapshot(id); ok && (pending && len(view.State.Pending) == 1 || !pending && view.Session.State == "idle") {
-			return view
+		if view, ok := pool.CommandSessionSnapshot(id); ok {
+			if !pending && view.Session.State == "idle" {
+				return view
+			}
+			if pending && len(view.State.Pending) == 1 {
+				// Registered identities include queued prompts. A ticket requires
+				// the public reader's emitted, actionable display, not just an ID.
+				payload, err := pool.ReadOwnedPrompt(t.Context(), view.Scope, view.State.Pending[0])
+				if err == nil && json.Valid(payload) {
+					return view
+				}
+			}
 		}
 		time.Sleep(time.Millisecond)
 	}
@@ -126,7 +137,31 @@ func TestParallelActualControllersPromptsBindingsAndPersistence(t *testing.T) {
 	events := desktopbridge.NewEventStream(1024)
 	factory := &parallelTrackingFactory{controllerFactory: newControllerFactory(events), controllers: make(map[string]*controllerRuntime)}
 	pool := desktopbridge.NewRuntimePool(factory)
-	defer pool.Shutdown()
+	var promptWaiters sync.WaitGroup
+	defer func() {
+		// A failed assertion may leave both fixture providers and the direct Ask
+		// goroutines blocked. Cancel and join before TempDir removes the store.
+		for _, owned := range factory.controllers {
+			owned.controller.Cancel()
+		}
+		joined := make(chan struct{})
+		go func() { promptWaiters.Wait(); close(joined) }()
+		select {
+		case <-joined:
+		case <-time.After(5 * time.Second):
+			t.Error("parallel prompt waiters did not stop")
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for id, owned := range factory.controllers {
+			for owned.controller.Running() && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			if owned.controller.Running() {
+				t.Errorf("parallel owner %s did not stop before store cleanup", id)
+			}
+		}
+		_ = pool.Shutdown()
+	}()
 	driver := newPreviewDesktopDriver(pool)
 	defer driver.Close()
 	route := bot.DesktopWatchRoute{Platform: bot.PlatformFeishu, ConnectionID: "fixture", ChatType: bot.ChatDM, ChatID: "owner"}
@@ -159,9 +194,11 @@ func TestParallelActualControllersPromptsBindingsAndPersistence(t *testing.T) {
 	}
 	answersA, answersB := make(chan []event.AskAnswer, 1), make(chan []event.AskAnswer, 1)
 	ask := func(id string, call ownedCommandCall, out chan<- []event.AskAnswer) {
+		defer promptWaiters.Done()
 		answers, _ := factory.controllers[id].controller.Ask(call.ctx, []event.AskQuestion{{ID: "q", Prompt: "Choose", Options: []event.AskOption{{Label: "A"}, {Label: "B"}}}})
 		out <- answers
 	}
+	promptWaiters.Add(2)
 	go ask("a", callA, answersA)
 	go ask("b", callB, answersB)
 	pendingA, pendingB := awaitParallelState(t, pool, "a", true), awaitParallelState(t, pool, "b", true)

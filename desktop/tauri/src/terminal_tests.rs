@@ -197,6 +197,37 @@ fn terminal_output_checks_bytes_offsets_budgets_and_signed_exit() {
 }
 
 #[test]
+fn large_nonterminal_frames_pass_through_without_terminal_projection() {
+    let mut event: BridgeEvent = serde_json::from_value(json!({
+        "protocolVersion": 1, "sequence": 71, "sessionId": "owned", "tabId": "tab-a",
+        "eventKind": "tool_result", "payload": {"kind": "tool_result", "text": "x".repeat(1 << 20)}
+    }))
+    .unwrap();
+    let text = event.payload["text"].as_str().unwrap();
+    let pointer = text.as_ptr();
+    let length = text.len();
+    for kind in [
+        "text",
+        "reasoning",
+        "tool_progress",
+        "tool_result",
+        "turn_started",
+        "turn_done",
+        "terminal_output_extra",
+    ] {
+        event.event_kind = kind.into();
+        event.payload["kind"] = json!(kind);
+        assert!(terminal_event(&event).is_none(), "{kind}");
+        let retained = event.payload["text"].as_str().unwrap();
+        assert_eq!(retained.as_ptr(), pointer);
+        assert_eq!(retained.len(), length);
+        assert_eq!(event.sequence, 71);
+        assert_eq!(event.session_id, "owned");
+        assert_eq!(event.tab_id.as_deref(), Some("tab-a"));
+    }
+}
+
+#[test]
 fn terminal_http_retry_keeps_exact_opaque_identity_and_binary_payload() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();

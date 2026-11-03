@@ -79,3 +79,37 @@ func TestLiveCheckpointInventoryIsBounded(t *testing.T) {
 		t.Fatal("checkpoint inventory is unbounded")
 	}
 }
+
+func TestLiveAnswerSnapshotsRemainImmutableAcrossAppendAndReset(t *testing.T) {
+	stream := NewEventStream(2)
+	sink := stream.Sink("a")
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	sink.Emit(event.Event{Kind: event.Text, Text: "first 中"})
+	before, _ := stream.LiveSnapshot("a")
+	sink.Emit(event.Event{Kind: event.Text, Text: " second 🙂"})
+	appended, _ := stream.LiveSnapshot("a")
+	sink.Emit(event.Event{Kind: event.ToolDispatch, Tool: event.Tool{ID: "call", Name: "read"}})
+	sink.Emit(event.Event{Kind: event.Text, Text: "fresh"})
+	fresh, _ := stream.LiveSnapshot("a")
+	if before.Answer.Segments[0] != "first 中" || appended.Answer.Segments[0] != "first 中 second 🙂" || fresh.Answer.Segments[0] != "fresh" {
+		t.Fatal("answer snapshot aliased a later delta or reset")
+	}
+	sink.Emit(event.Event{Kind: event.TurnDone})
+	done, _ := stream.LiveSnapshot("a")
+	if len(done.Answer.Segments) != 0 || done.Active || fresh.Answer.Segments[0] != "fresh" {
+		t.Fatal("terminal reset changed an earlier snapshot")
+	}
+}
+
+func TestLiveAnswerBuilderRetainsUnicodeLimitAcrossTinyDeltas(t *testing.T) {
+	stream := NewEventStream(1)
+	sink := stream.Sink("a")
+	sink.Emit(event.Event{Kind: event.TurnStarted})
+	for range LiveAnswerRuneLimit + 3 {
+		sink.Emit(event.Event{Kind: event.Text, Text: "🙂"})
+	}
+	view, _ := stream.LiveSnapshot("a")
+	if !view.Truncated || view.Answer.Segments[0] != strings.Repeat("🙂", LiveAnswerRuneLimit) {
+		t.Fatal("tiny unicode deltas exceeded the public answer limit")
+	}
+}

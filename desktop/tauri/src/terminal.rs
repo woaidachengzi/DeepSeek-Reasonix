@@ -168,6 +168,14 @@ pub fn validate_output(output: &BridgeTerminalOutputView, max: usize) -> Result<
 /// dropped rather than reaching Agent consumers). Canonical serialization drops
 /// unknown fields; terminal payloads contain only typed byte/exit information.
 pub fn terminal_event(event: &BridgeEvent) -> Option<Result<BridgeEvent, String>> {
+    // Every bridge frame passes here. Most are Agent events, whose payloads
+    // can contain large tool results or screenshots; leave those borrowed.
+    if !matches!(
+        event.event_kind.as_str(),
+        "terminal_output" | "terminal_exit"
+    ) {
+        return None;
+    }
     let mut clean = event.clone();
     let result = match event.event_kind.as_str() {
         "terminal_output" => (|| {
