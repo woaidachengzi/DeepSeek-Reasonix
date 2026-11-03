@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"image"
+	"image/color"
+	"image/jpeg"
 	"image/png"
 	"strings"
 	"testing"
@@ -236,5 +238,64 @@ func TestCuaBrowserScreenshotUsesExistingPreviewActionContract(t *testing.T) {
 	_, images, err := (computerUse{}).cuaResult(ctx, computeruse.CuaRequest{Action: "browser_observe", PID: 42, WindowID: 11}, &computeruse.Target{PID: 42, Name: "Fixture"}, reply)
 	if err != nil || len(images) != 1 || preview.Action != "observe" || preview.WindowID != 11 || !strings.HasPrefix(preview.Image, "data:image/jpeg;base64,") {
 		t.Fatalf("browser screenshot did not reach the existing PiP contract: %+v %v", preview, err)
+	}
+}
+
+func TestCuaWorkerPreviewAndFallbackPreserveModelImageAndActionFacts(t *testing.T) {
+	var source bytes.Buffer
+	if err := png.Encode(&source, image.NewRGBA(image.Rect(0, 0, 640, 400))); err != nil {
+		t.Fatal(err)
+	}
+	var thumbnail bytes.Buffer
+	red := image.NewRGBA(image.Rect(0, 0, 480, 300))
+	for y := 0; y < 300; y++ {
+		for x := 0; x < 480; x++ {
+			red.SetRGBA(x, y, color.RGBA{R: 255, A: 255})
+		}
+	}
+	if err := jpeg.Encode(&thumbnail, red, &jpeg.Options{Quality: 70}); err != nil {
+		t.Fatal(err)
+	}
+	workerData := base64.StdEncoding.EncodeToString(thumbnail.Bytes())
+	workerPreview, _ := json.Marshal(map[string]any{"source_image_index": 0, "mime_type": "image/jpeg", "width": 480, "height": 300, "data_base64": workerData})
+	reply := computeruse.CuaReply{
+		Result: json.RawMessage(`{"effect":"unverifiable"}`), Action: json.RawMessage(`{"effect":"unverifiable","route":"ax","delivery":{"count":1}}`),
+		Images: []computeruse.CuaImage{{MIME: "image/png", Data: base64.StdEncoding.EncodeToString(source.Bytes())}},
+	}
+	request := computeruse.CuaRequest{Action: "observe", PID: 42, WindowID: 11}
+	target := &computeruse.Target{PID: 42, Name: "Fixture"}
+	wantBody, wantImages, err := (computerUse{}).cuaResult(t.Context(), request, nil, reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name    string
+		preview json.RawMessage
+		worker  bool
+	}{{"worker", workerPreview, true}, {"old worker", nil, false}, {"bad worker preview", json.RawMessage(`{"width":"bad"}`), false}} {
+		t.Run(test.name, func(t *testing.T) {
+			reply.Preview = test.preview
+			var observed tool.ComputerUsePreview
+			ctx := tool.WithComputerUsePreview(t.Context(), func(p tool.ComputerUsePreview) { observed = p })
+			body, images, err := (computerUse{}).cuaResult(ctx, request, target, reply)
+			if err != nil || body != wantBody || len(images) != 1 || images[0] != wantImages[0] || observed.Image == "" {
+				t.Fatalf("display-only change affected model/action result: %v", err)
+			}
+			if test.worker != (observed.Image == "data:image/jpeg;base64,"+workerData) {
+				t.Fatal("wrong thumbnail path selected")
+			}
+		})
+	}
+	reply.Preview = workerPreview
+	request.Action = "click"
+	wantBody, wantImages, err = (computerUse{}).cuaResult(t.Context(), request, nil, reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var observed tool.ComputerUsePreview
+	ctx := tool.WithComputerUsePreview(t.Context(), func(p tool.ComputerUsePreview) { observed = p })
+	body, images, err := (computerUse{}).cuaResult(ctx, request, target, reply)
+	if err != nil || body != wantBody || len(images) != 1 || images[0] != wantImages[0] || observed.Image == "" || observed.Image == "data:image/jpeg;base64,"+workerData {
+		t.Fatal("write action must retain the post-reply Go preview without changing action facts")
 	}
 }

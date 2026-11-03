@@ -5,6 +5,26 @@ import (
 	"testing"
 )
 
+func TestCuaPreviewRollbackForwardsOnlyExactDisable(t *testing.T) {
+	for _, value := range []string{"", "0", "1", "false", "0\nPRIVATE"} {
+		t.Setenv("REASONIX_CUA_RUST_PREVIEW", value)
+		for _, platform := range []string{"darwin", "linux"} {
+			found := false
+			for _, entry := range cuaProcessEnvironment(platform) {
+				if strings.HasPrefix(entry, "REASONIX_CUA_RUST_PREVIEW=") {
+					if entry != "REASONIX_CUA_RUST_PREVIEW=0" {
+						t.Fatal("unbounded rollback setting inherited")
+					}
+					found = true
+				}
+			}
+			if found != (value == "0") {
+				t.Fatalf("platform=%s setting=%q forwarded=%v", platform, value, found)
+			}
+		}
+	}
+}
+
 func TestCuaLinuxEnvironmentKeepsDesktopTransportsWithoutSecretsOrOverrides(t *testing.T) {
 	for key, value := range map[string]string{
 		"DISPLAY": ":7", "WAYLAND_DISPLAY": "wayland-7", "XAUTHORITY": "/run/user/1000/fixture.auth", "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus", "XDG_RUNTIME_DIR": "/run/user/1000", "XDG_SESSION_TYPE": "wayland", "CUA_DRIVER_RS_ENABLE_WAYLAND": "1",

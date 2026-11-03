@@ -114,14 +114,21 @@ func (c computerUse) cuaResult(ctx context.Context, request computeruse.CuaReque
 	cuaInputFacts(request, reply, body)
 
 	var images []string
-	for _, image := range reply.Images {
+	for imageIndex, image := range reply.Images {
 		if (image.MIME != "image/png" && image.MIME != "image/jpeg") || len(image.Data) > 5<<20 {
 			continue
 		}
 		data := "data:" + image.MIME + ";base64," + image.Data
 		images = append(images, data)
 		if target != nil {
-			if thumbnail := computeruse.PreviewImage(data); thumbnail != "" {
+			var thumbnail string
+			if request.Action == "observe" || request.Action == "browser_observe" {
+				thumbnail = computeruse.CuaPreviewImage(reply, imageIndex)
+			}
+			if thumbnail == "" {
+				thumbnail = computeruse.PreviewImage(data)
+			}
+			if thumbnail != "" {
 				previewAction := request.Action
 				if previewAction == "browser_observe" {
 					previewAction = "observe"

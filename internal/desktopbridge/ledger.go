@@ -26,6 +26,7 @@ type EventLedger struct {
 	capacity int
 	next     uint64
 	events   []Event
+	head     int
 }
 
 func NewEventLedger(capacity int) *EventLedger {
@@ -42,10 +43,13 @@ func (l *EventLedger) Append(event Event) Event {
 	event.ProtocolVersion = ProtocolVersion
 	event.Sequence = l.next
 	event.Payload = append(json.RawMessage(nil), event.Payload...)
-	l.events = append(l.events, event)
-	if overflow := len(l.events) - l.capacity; overflow > 0 {
-		copy(l.events, l.events[overflow:])
-		l.events = l.events[:len(l.events)-overflow]
+	if len(l.events) < l.capacity {
+		l.events = append(l.events, event)
+	} else {
+		// Replace the oldest slot without moving the entire replay window for
+		// every delta. Replay still walks oldest to newest under the same lock.
+		l.events[l.head] = event
+		l.head = (l.head + 1) % len(l.events)
 	}
 	return event
 }
@@ -55,14 +59,20 @@ func (l *EventLedger) Append(event Event) Event {
 func (l *EventLedger) After(sequence uint64) (events []Event, resyncRequired bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if sequence > l.next {
+		// A cursor from another process lifetime cannot subscribe to this
+		// ledger and silently ignore all newly restarted sequence numbers.
+		return nil, true
+	}
 	if len(l.events) == 0 {
 		return nil, false
 	}
-	oldest := l.events[0].Sequence
-	if sequence+1 < oldest {
+	oldest := l.events[l.head].Sequence
+	if sequence < oldest-1 {
 		return nil, true
 	}
-	for _, event := range l.events {
+	for offset := range len(l.events) {
+		event := l.events[(l.head+offset)%len(l.events)]
 		if event.Sequence > sequence {
 			event.Payload = append(json.RawMessage(nil), event.Payload...)
 			events = append(events, event)

@@ -3245,7 +3245,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64",
  "cua-driver-sdk",
+ "image",
  "objc2 0.5.3",
  "serde",
  "serde_json",

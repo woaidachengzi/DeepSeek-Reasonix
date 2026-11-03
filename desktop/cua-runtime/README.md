@@ -5,6 +5,27 @@ The macOS and GNU/Linux integration links the MIT Cua Driver Rust SDK from
 The linked driver reports version `0.38.0`. No reverse engineering or proprietary
 Cua Spaces code is used.
 
+## Read-only preview offload (0.1.70)
+
+For `observe` and `browser_observe`, the Rust worker now makes the bounded,
+display-only JPEG thumbnail from the existing screenshot. Go validates only
+that small optional image; the complete model image and capture identity stay
+unchanged. Write actions retain the original post-reply Go path, so optional
+image work cannot consume the transport deadline after a mutation.
+
+Source data URLs are capped at 5 MiB, decoded edges at 4096, preview edges at
+480 and the JPEG body at 40 KiB. An optional preview that would exceed the
+existing 15 MiB reply limit is removed before returning the original result.
+Malformed or missing previews fall back to the existing Go implementation.
+`REASONIX_CUA_RUST_PREVIEW=0` is an exact, host-only disable switch; only that
+value is forwarded to the sanitized worker environment. It grants no access.
+
+The offline `preview_pipeline` example and Go `BenchmarkCuaPreviewPipeline`
+compare the same synthetic PNG/JPEG inputs through a warm worker, complete
+image JSON serialization/pipe/Go decode and final thumbnail validation. They
+exclude SDK capture and model/network waits. Go allocation counters exclude
+the Rust process and cannot establish a whole-application RSS improvement.
+
 ## Build
 
 Requires macOS 14+, Apple Command Line Tools, Rust, Go, Python 3.12+, Node 24 and

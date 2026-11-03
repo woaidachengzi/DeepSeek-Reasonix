@@ -3,6 +3,7 @@ mod browser;
 mod identity;
 #[cfg(test)]
 mod linux_region_tests;
+mod preview;
 mod request;
 use cua_driver_sdk::{
     ConfiguredDriverOptions, CuaDriver, RuntimeAuthorizationOptions, SessionPermissionMode,
@@ -40,6 +41,7 @@ fn create_driver(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let rust_preview = preview::enabled(std::env::var("REASONIX_CUA_RUST_PREVIEW").ok().as_deref());
     let (driver, consent) = create_driver()?;
     let session = driver.create_trusted_session(TrustedSessionOptions {
         public_session: "reasonix_browser".into(),
@@ -96,6 +98,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 consent.clear();
                 match result {
                     Ok(result) => {
+                        // Best-effort display work only: failure must not change
+                        // the outcome of an already dispatched native action.
+                        let preview = if rust_preview {
+                            preview::for_observation(
+                                &envelope.request.action,
+                                result.images.iter().map(|image| {
+                                    (image.mime_type.as_str(), image.data_base64.as_str())
+                                }),
+                            )
+                        } else {
+                            None
+                        };
                         let structured = result
                             .structured_json
                             .as_deref()
@@ -108,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             });
                         json!({"protocol":PROTOCOL,"id":sequence,"driver":"cua","version":version,"result":structured,"text":result.text,
                         "images":result.images.iter().map(|i|json!({"mime_type":i.mime_type,"data_base64":i.data_base64})).collect::<Vec<_>>(),
-                        "action":result.action,"is_error":result.is_error || refused,"error_code":result.error_code})
+                        "action":result.action,"is_error":result.is_error || refused,"error_code":result.error_code,"preview":preview})
                     }
                     Err(error) => {
                         json!({"protocol":PROTOCOL,"id":sequence,"driver":"cua","version":version,"is_error":true,"completion":"unknown","error_code":"reasonix_driver_error","error":error.to_string(),"result":{},"images":[]})
@@ -118,7 +132,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         reply["source_revision"] = json!(SOURCE_REVISION);
         reply["source_fingerprint"] = json!(SOURCE_FINGERPRINT);
-        let encoded = serde_json::to_vec(&reply)?;
+        let encoded = preview::encode_reply(&mut reply, 15 * 1024 * 1024)?;
         if encoded.len() > 15 * 1024 * 1024 {
             break;
         }

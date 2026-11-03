@@ -40,6 +40,9 @@ type CuaReply struct {
 	ErrorCode         string          `json:"error_code,omitempty"`
 	Error             string          `json:"error,omitempty"`
 	Completion        string          `json:"completion,omitempty"`
+	// Keep an optional preview opaque here: malformed optional display data
+	// must not turn a completed native action into a transport uncertainty.
+	Preview json.RawMessage `json:"preview,omitempty"`
 }
 
 // Transport uncertainty must never be turned into a retryable refusal.

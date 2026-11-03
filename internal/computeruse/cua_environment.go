@@ -7,6 +7,11 @@ func cuaProcessEnvironment(platform string) []string {
 	if home, err := os.UserHomeDir(); err == nil {
 		env = append(env, "HOME="+home)
 	}
+	// A host-only rollback switch can disable optional display work. It never
+	// widens driver permissions or inherits other application configuration.
+	if os.Getenv("REASONIX_CUA_RUST_PREVIEW") == "0" {
+		env = append(env, "REASONIX_CUA_RUST_PREVIEW=0")
+	}
 	if platform == "linux" {
 		// These are transport addresses for the logged-in desktop, not model
 		// credentials or Cua driver configuration. Never inherit the whole env.
