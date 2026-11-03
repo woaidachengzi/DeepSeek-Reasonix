@@ -471,3 +471,44 @@ python3 tools/tauri/bench-reply-capacity.py --output /tmp/reasonix-reply-capacit
 The protected 0.1.73 rollback and 0.1.74 package are stored outside bundler
 cleanup in `desktop/tauri/target/releases.noindex/`. Native package verification
 is recorded in the archived receipt; no native input or screenshot is used.
+
+## Follow-up: preview/metadata capacity, 0.1.75
+
+The 0.1.74 image/text hint could still grow its output buffer when a large
+observation also contained preview and structured metadata. For image bodies
+totalling at least 1MiB, the hint now includes a cheap structural estimate of
+result/action/preview values. It reads string lengths rather than serializing
+them, visits at most 256 nodes per value and descends at most 32 levels.
+Smaller images and image-free replies keep the previous sizing strategy.
+Underestimation still permits normal buffer growth; actual encoded bytes,
+preview-only removal and full-image preservation retain the original rules.
+
+An initial exact-size counting serializer reduced allocations but made small
+replies slower, so it was rejected. The bounded estimate avoids that extra
+serialization pass. Thirty adapter tests and production clippy pass, including
+escaping, underestimated/deep metadata and the real 15MiB boundaries.
+
+Five alternating rounds compare the exact 0.1.74 normal sizing path against
+the final code. Synthetic fixtures add a 48KiB preview string and roughly
+128KiB of structured metadata; no image decoding or capture occurs. Source
+hashes and every sample are in
+[`benchmark.json`](evidence/2026-11-03-reply-metadata/benchmark.json).
+
+| Image body | Rust allocation requests, old → new | Isolated encoding | Warm pipe/Go decode |
+| --- | ---: | ---: | ---: |
+| 64KiB | 0.598 → 0.598 MB | 0.084 → 0.084 ms | 0.431 → 0.405 ms |
+| 1MiB | 3.281 → 1.362 MB | 0.456 → 0.367 ms | 2.004 → 1.986 ms |
+| 8MiB | 25.301 → 8.702 MB | 2.682 → 2.607 ms | 20.252 → 18.652 ms |
+
+The primary result is fewer cumulative allocation requests for large replies
+with preview/metadata. Latencies vary across batches; no guaranteed whole-app
+speedup or peak-RSS improvement is claimed. Small replies take the old branch.
+The SDK, wire format, permissions, actions and provider behavior are unchanged.
+
+```sh
+python3 tools/tauri/bench-reply-metadata.py --output /tmp/reasonix-reply-metadata-bench
+```
+
+0.1.74 rollback and 0.1.75 packages are archived under
+`desktop/tauri/target/releases.noindex/`, outside bundler cleanup. The release
+receipt records signature, source and package checks; no native input is used.

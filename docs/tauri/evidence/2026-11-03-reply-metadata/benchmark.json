@@ -1,0 +1,680 @@
+{
+  "baseline_commit": "d5d3852dadeceb8221dae085c1b045c4e88bd2b9",
+  "baseline_route": "capacity074: exact 0.1.74 image/text sizing and to_writer normal path, fixtures below cap",
+  "rounds": 5,
+  "source_sha256": {
+    "desktop/cua-runtime/src/reply.rs": "67d780f46474e55bca08919ab005be3dfdd7393ea670ad1e11672a64644af592",
+    "desktop/cua-runtime/examples/reply_pipeline.rs": "083bb723cec614bfa9e1976085e71f194a7a4e4071a1634743ffcf327bbbf31a",
+    "internal/computeruse/cua_reply_bench_test.go": "f19fa638d53066ddde7ce42fcaf1e4096c7f4c8d415e5525b0fc85b31bb12d95",
+    "tools/tauri/bench-reply-metadata.py": "dac6137f2dc1d16d9abfce17667292ad0d8e88e2aa3a3c25126b98a6fbb40390"
+  },
+  "rust": [
+    {
+      "round": 0,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 195877.5,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 0,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 566742.5,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 3280608.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 0,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2681746.68,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 25300704.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 0,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 90955.82,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 0,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 366516.66,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 1361649.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 0,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2607195.82,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 8701681.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 1,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 81150.0,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 1,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 371427.5,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 1361649.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 1,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2775134.16,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 8701681.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 1,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 76127.5,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 1,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 355560.84,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 3280608.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 1,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2508004.18,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 25300704.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 2,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 85471.68,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 2,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 376834.16,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 3280608.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 2,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2441601.68,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 25300704.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 2,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 83584.16,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 2,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 349712.5,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 1361649.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 2,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2480725.0,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 8701681.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 3,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 84223.34,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 3,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 352206.66,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 1361649.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 3,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2496781.66,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 8701681.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 3,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 81762.5,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 3,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 497141.66,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 3280608.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 3,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2965428.34,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 25300704.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 4,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 84253.32,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 4,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 456160.84,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 3280608.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 4,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2799070.0,
+      "route": "capacity074",
+      "rust_allocated_bytes_per_op": 25300704.0,
+      "rust_allocations_per_op": 7.0
+    },
+    {
+      "round": 4,
+      "allocation_iterations": 10,
+      "base64_bytes": 65536,
+      "encoded_bytes": 246102,
+      "iterations": 50,
+      "ns_per_op": 81055.82,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 597844.0,
+      "rust_allocations_per_op": 8.0
+    },
+    {
+      "round": 4,
+      "allocation_iterations": 10,
+      "base64_bytes": 1048576,
+      "encoded_bytes": 1229142,
+      "iterations": 50,
+      "ns_per_op": 368249.16,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 1361649.0,
+      "rust_allocations_per_op": 6.0
+    },
+    {
+      "round": 4,
+      "allocation_iterations": 10,
+      "base64_bytes": 8388608,
+      "encoded_bytes": 8569174,
+      "iterations": 50,
+      "ns_per_op": 2636895.0,
+      "route": "borrowed",
+      "rust_allocated_bytes_per_op": 8701681.0,
+      "rust_allocations_per_op": 6.0
+    }
+  ],
+  "pipe": [
+    {
+      "round": 0,
+      "route": "capacity074",
+      "base64_bytes": 65536,
+      "ns_per_op": 485578.0,
+      "go_bytes_per_op": 262896,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 0,
+      "route": "capacity074",
+      "base64_bytes": 1048576,
+      "ns_per_op": 2073687.0,
+      "go_bytes_per_op": 1245783,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 0,
+      "route": "capacity074",
+      "base64_bytes": 8388608,
+      "ns_per_op": 19192553.0,
+      "go_bytes_per_op": 8586568,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 0,
+      "route": "borrowed",
+      "base64_bytes": 65536,
+      "ns_per_op": 453783.0,
+      "go_bytes_per_op": 262784,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 0,
+      "route": "borrowed",
+      "base64_bytes": 1048576,
+      "ns_per_op": 1986349.0,
+      "go_bytes_per_op": 1246000,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 0,
+      "route": "borrowed",
+      "base64_bytes": 8388608,
+      "ns_per_op": 20287342.0,
+      "go_bytes_per_op": 8586382,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 1,
+      "route": "borrowed",
+      "base64_bytes": 65536,
+      "ns_per_op": 359603.0,
+      "go_bytes_per_op": 262680,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 1,
+      "route": "borrowed",
+      "base64_bytes": 1048576,
+      "ns_per_op": 1820288.0,
+      "go_bytes_per_op": 1245889,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 1,
+      "route": "borrowed",
+      "base64_bytes": 8388608,
+      "ns_per_op": 18265362.0,
+      "go_bytes_per_op": 8585819,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 1,
+      "route": "capacity074",
+      "base64_bytes": 65536,
+      "ns_per_op": 379908.0,
+      "go_bytes_per_op": 262782,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 1,
+      "route": "capacity074",
+      "base64_bytes": 1048576,
+      "ns_per_op": 1883759.0,
+      "go_bytes_per_op": 1246099,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 1,
+      "route": "capacity074",
+      "base64_bytes": 8388608,
+      "ns_per_op": 20472228.0,
+      "go_bytes_per_op": 8586572,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 2,
+      "route": "capacity074",
+      "base64_bytes": 65536,
+      "ns_per_op": 365271.0,
+      "go_bytes_per_op": 263002,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 2,
+      "route": "capacity074",
+      "base64_bytes": 1048576,
+      "ns_per_op": 2010574.0,
+      "go_bytes_per_op": 1245889,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 2,
+      "route": "capacity074",
+      "base64_bytes": 8388608,
+      "ns_per_op": 20251645.0,
+      "go_bytes_per_op": 8586034,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 2,
+      "route": "borrowed",
+      "base64_bytes": 65536,
+      "ns_per_op": 381583.0,
+      "go_bytes_per_op": 262996,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 2,
+      "route": "borrowed",
+      "base64_bytes": 1048576,
+      "ns_per_op": 1782395.0,
+      "go_bytes_per_op": 1246007,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 2,
+      "route": "borrowed",
+      "base64_bytes": 8388608,
+      "ns_per_op": 18651978.0,
+      "go_bytes_per_op": 8586298,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 3,
+      "route": "borrowed",
+      "base64_bytes": 65536,
+      "ns_per_op": 419974.0,
+      "go_bytes_per_op": 262890,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 3,
+      "route": "borrowed",
+      "base64_bytes": 1048576,
+      "ns_per_op": 2234959.0,
+      "go_bytes_per_op": 1245889,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 3,
+      "route": "borrowed",
+      "base64_bytes": 8388608,
+      "ns_per_op": 18239830.0,
+      "go_bytes_per_op": 8586487,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 3,
+      "route": "capacity074",
+      "base64_bytes": 65536,
+      "ns_per_op": 430699.0,
+      "go_bytes_per_op": 263000,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 3,
+      "route": "capacity074",
+      "base64_bytes": 1048576,
+      "ns_per_op": 1878422.0,
+      "go_bytes_per_op": 1245895,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 3,
+      "route": "capacity074",
+      "base64_bytes": 8388608,
+      "ns_per_op": 19839528.0,
+      "go_bytes_per_op": 8585928,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 4,
+      "route": "capacity074",
+      "base64_bytes": 65536,
+      "ns_per_op": 438023.0,
+      "go_bytes_per_op": 262893,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 4,
+      "route": "capacity074",
+      "base64_bytes": 1048576,
+      "ns_per_op": 2004492.0,
+      "go_bytes_per_op": 1245787,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 4,
+      "route": "capacity074",
+      "base64_bytes": 8388608,
+      "ns_per_op": 22896489.0,
+      "go_bytes_per_op": 8586241,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 4,
+      "route": "borrowed",
+      "base64_bytes": 65536,
+      "ns_per_op": 404768.0,
+      "go_bytes_per_op": 262996,
+      "go_allocs_per_op": 8
+    },
+    {
+      "round": 4,
+      "route": "borrowed",
+      "base64_bytes": 1048576,
+      "ns_per_op": 2098726.0,
+      "go_bytes_per_op": 1245891,
+      "go_allocs_per_op": 7
+    },
+    {
+      "round": 4,
+      "route": "borrowed",
+      "base64_bytes": 8388608,
+      "ns_per_op": 21567222.0,
+      "go_bytes_per_op": 8586371,
+      "go_allocs_per_op": 8
+    }
+  ],
+  "medians": {
+    "rust": [
+      {
+        "route": "capacity074",
+        "base64_bytes": 65536,
+        "ns_per_op": 84253.32,
+        "rust_allocated_bytes_per_op": 597844.0,
+        "rust_allocations_per_op": 8.0
+      },
+      {
+        "route": "capacity074",
+        "base64_bytes": 1048576,
+        "ns_per_op": 456160.84,
+        "rust_allocated_bytes_per_op": 3280608.0,
+        "rust_allocations_per_op": 7.0
+      },
+      {
+        "route": "capacity074",
+        "base64_bytes": 8388608,
+        "ns_per_op": 2681746.68,
+        "rust_allocated_bytes_per_op": 25300704.0,
+        "rust_allocations_per_op": 7.0
+      },
+      {
+        "route": "borrowed",
+        "base64_bytes": 65536,
+        "ns_per_op": 83584.16,
+        "rust_allocated_bytes_per_op": 597844.0,
+        "rust_allocations_per_op": 8.0
+      },
+      {
+        "route": "borrowed",
+        "base64_bytes": 1048576,
+        "ns_per_op": 366516.66,
+        "rust_allocated_bytes_per_op": 1361649.0,
+        "rust_allocations_per_op": 6.0
+      },
+      {
+        "route": "borrowed",
+        "base64_bytes": 8388608,
+        "ns_per_op": 2607195.82,
+        "rust_allocated_bytes_per_op": 8701681.0,
+        "rust_allocations_per_op": 6.0
+      }
+    ],
+    "pipe": [
+      {
+        "route": "capacity074",
+        "base64_bytes": 65536,
+        "ns_per_op": 430699.0,
+        "go_bytes_per_op": 262896,
+        "go_allocs_per_op": 7
+      },
+      {
+        "route": "capacity074",
+        "base64_bytes": 1048576,
+        "ns_per_op": 2004492.0,
+        "go_bytes_per_op": 1245889,
+        "go_allocs_per_op": 7
+      },
+      {
+        "route": "capacity074",
+        "base64_bytes": 8388608,
+        "ns_per_op": 20251645.0,
+        "go_bytes_per_op": 8586241,
+        "go_allocs_per_op": 8
+      },
+      {
+        "route": "borrowed",
+        "base64_bytes": 65536,
+        "ns_per_op": 404768.0,
+        "go_bytes_per_op": 262890,
+        "go_allocs_per_op": 7
+      },
+      {
+        "route": "borrowed",
+        "base64_bytes": 1048576,
+        "ns_per_op": 1986349.0,
+        "go_bytes_per_op": 1245891,
+        "go_allocs_per_op": 7
+      },
+      {
+        "route": "borrowed",
+        "base64_bytes": 8388608,
+        "ns_per_op": 18651978.0,
+        "go_bytes_per_op": 8586371,
+        "go_allocs_per_op": 8
+      }
+    ]
+  },
+  "limits": [
+    "Synthetic replies; no capture, thumbnails, model or input.",
+    "Rust counts allocation requests separately from timing; not peak RSS.",
+    "Pipe includes warm worker, full Go decode and image identity validation."
+  ]
+}

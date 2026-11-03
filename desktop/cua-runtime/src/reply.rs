@@ -1,6 +1,47 @@
 //! Borrowed worker envelopes, retaining the original compact JSON wire shape.
 use serde::{ser::SerializeSeq, Serialize, Serializer};
 use serde_json::Value;
+// Cheap allocation hint only; escaped strings may require more actual bytes.
+fn value_capacity(value: &Value, depth: u8) -> usize {
+    fn visit(value: &Value, depth: u8, remaining: &mut usize) -> usize {
+        if depth == 0 || *remaining == 0 {
+            return 0;
+        }
+        *remaining -= 1;
+        match value {
+            Value::Null => 4,
+            Value::Bool(_) => 5,
+            Value::Number(_) => 24,
+            Value::String(text) => text.len().saturating_add(2),
+            Value::Array(values) => {
+                let mut size = 2usize;
+                for value in values {
+                    if *remaining == 0 {
+                        break;
+                    }
+                    size =
+                        size.saturating_add(1)
+                            .saturating_add(visit(value, depth - 1, remaining));
+                }
+                size
+            }
+            Value::Object(values) => {
+                let mut size = 2usize;
+                for (key, value) in values {
+                    if *remaining == 0 {
+                        break;
+                    }
+                    size = size
+                        .saturating_add(key.len())
+                        .saturating_add(4)
+                        .saturating_add(visit(value, depth - 1, remaining));
+                }
+                size
+            }
+        }
+    }
+    visit(value, depth, &mut 256)
+}
 
 #[derive(Clone, Copy)]
 pub struct Context<'a> {
@@ -101,10 +142,17 @@ impl<I: ImageBytes> Success<'_, I> {
     pub fn encode(&mut self, limit: usize) -> serde_json::Result<Vec<u8>> {
         // A sizing hint only: escaped text and arbitrary structured data may
         // still grow the buffer. Wire limits are checked against actual bytes.
-        let hint = self
-            .images
-            .image_bytes()
+        let images = self.images.image_bytes();
+        let metadata = if images >= 1 << 20 {
+            value_capacity(self.result, 32)
+                .saturating_add(self.action.map_or(0, |v| value_capacity(v, 32)))
+                .saturating_add(self.preview.flatten().map_or(0, |v| value_capacity(v, 32)))
+        } else {
+            0
+        };
+        let hint = images
             .saturating_add(self.text.len())
+            .saturating_add(metadata)
             .saturating_add(1024);
         let mut encoded = Vec::with_capacity(hint.min(limit.max(128)));
         serde_json::to_writer(&mut encoded, &*self)?;

@@ -1,6 +1,6 @@
 {
   "productName": "Reasonix Tauri",
-  "version": "0.1.74",
+  "version": "0.1.75",
   "identifier": "io.reasonix.desktop.preview",
   "bundle": {
     "targets": ["deb", "appimage"],

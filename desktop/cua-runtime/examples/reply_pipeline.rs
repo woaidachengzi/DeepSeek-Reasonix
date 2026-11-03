@@ -105,7 +105,7 @@ fn encode(fixture: &Fixture, id: u64, route: &str) -> serde_json::Result<Vec<u8>
             value.as_object_mut().unwrap().remove("preview");
             serde_json::to_vec(&value)
         }
-        "borrowed" | "previous" => {
+        "borrowed" | "previous" | "capacity074" => {
             let mut value = reply::Success::new(
                 context(id),
                 reply::SuccessData {
@@ -126,6 +126,20 @@ fn encode(fixture: &Fixture, id: u64, route: &str) -> serde_json::Result<Vec<u8>
                 let encoded = serde_json::to_vec(&value)?;
                 assert!(encoded.len() <= LIMIT);
                 Ok(encoded)
+            } else if route == "capacity074" {
+                let hint = fixture
+                    .images
+                    .iter()
+                    .fold(0usize, |n, i| {
+                        n.saturating_add(i.data_base64.len())
+                            .saturating_add(i.mime_type.len())
+                    })
+                    .saturating_add(fixture.text.len())
+                    .saturating_add(1024);
+                let mut encoded = Vec::with_capacity(hint.min(LIMIT));
+                serde_json::to_writer(&mut encoded, &value)?;
+                assert!(encoded.len() <= LIMIT);
+                Ok(encoded)
             } else {
                 value.encode(LIMIT)
             }
@@ -144,7 +158,7 @@ fn benchmark(
     if iterations == 0 || size > 8 << 20 {
         return Err("positive iterations and at most 8MiB fixture required".into());
     }
-    let fixture = Fixture {
+    let mut fixture = Fixture {
         images: if size == 0 {
             vec![]
         } else {
@@ -162,6 +176,11 @@ fn benchmark(
         error_code: None,
         preview: None,
     };
+    if std::env::var_os("REASONIX_REPLY_METADATA_FIXTURE").is_some() {
+        fixture.preview = Some(json!({"mime_type":"image/jpeg","data_base64":"P".repeat(48<<10)}));
+        fixture.structured_json =
+            Some(json!({"mode":"snapshot","nodes":"metadata".repeat(16<<10)}).to_string());
+    }
     let baseline = encode(&fixture, 1, "legacy")?;
     assert_eq!(baseline, encode(&fixture, 1, "borrowed")?);
     let encoded_bytes = baseline.len();

@@ -21,15 +21,20 @@ func BenchmarkCuaReplyPipeline(b *testing.B) {
 	}
 	for _, size := range []int{64 << 10, 1 << 20, 8 << 20} {
 		data := strings.Repeat("A", size)
-		fixture, err := json.Marshal(map[string]any{
+		input := map[string]any{
 			"images":          []map[string]string{{"mime_type": "image/png", "data_base64": data}},
 			"structured_json": `{"mode":"snapshot","effect":"unverifiable"}`,
 			"text":            "Synthetic reply fixture",
-		})
+		}
+		if os.Getenv("REASONIX_REPLY_METADATA_FIXTURE") != "" {
+			input["structured_json"] = `{"nodes":"` + strings.Repeat("metadata", 16<<10) + `"}`
+			input["preview"] = map[string]string{"mime_type": "image/jpeg", "data_base64": strings.Repeat("P", 48<<10)}
+		}
+		fixture, err := json.Marshal(input)
 		if err != nil {
 			b.Fatal(err)
 		}
-		for _, mode := range []string{"legacy", "previous", "borrowed"} {
+		for _, mode := range []string{"legacy", "previous", "capacity074", "borrowed"} {
 			b.Run(fmt.Sprintf("%dKiB/%s", size>>10, mode), func(b *testing.B) {
 				cmd := exec.Command(binary)
 				cmd.Env = cuaProcessEnvironment(runtime.GOOS)

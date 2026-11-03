@@ -12,6 +12,32 @@ fn context() -> Context<'static> {
 }
 
 #[test]
+fn shallow_capacity_estimate_never_truncates_deeper_metadata() {
+    assert!(value_capacity(&Value::Array(vec![json!(0); 4096]), 32) < 10000);
+    let mut result = json!("leaf");
+    for _ in 0..80 {
+        result = json!([result]);
+    }
+    let data = || SuccessData {
+        result: &result,
+        text: "",
+        images: Images(std::iter::once(Image {
+            data_base64: "AAAA",
+            mime_type: "image/png",
+        })),
+        action: None,
+        is_error: false,
+        error_code: None,
+        preview: None,
+    };
+    let expected = legacy_success(context(), &data(), usize::MAX);
+    assert_eq!(
+        Success::new(context(), data()).encode(usize::MAX).unwrap(),
+        expected
+    );
+}
+
+#[test]
 fn capacity_hint_is_not_a_wire_limit_or_an_escaping_estimate() {
     let image = "\"\\\n界".repeat(4096);
     let result = json!({"large": "metadata".repeat(4096)});
