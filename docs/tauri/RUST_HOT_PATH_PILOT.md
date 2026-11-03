@@ -562,7 +562,7 @@ same 770 allocations/op. Query code is unchanged; this is not attributed as a
 search speedup. Tauri currently filters loaded session/project names, whereas
 historical full-text indexing is a separate path. Existing Tauri name-filter
 measurements are [recorded separately](evidence/2026-11-03-context-index/name-filter.json):
-200/1K/10K loaded sessions cost 0.028/0.133/1.456 ms per query in the synthetic
+200/1K/10K loaded sessions cost 0.026/0.126/1.187 ms per query in the synthetic
 Node probe. It excludes render time and does not justify another cache or a
 Rust IPC crossing at this stage.
 
@@ -570,5 +570,75 @@ Rust IPC crossing at this stage.
 python3 tools/tauri/bench-context-index.py --output /tmp/reasonix-context-index-bench
 ```
 
-Renderer acceptance and final release checks are recorded below after the
-independent validation runs complete.
+### Actual WebView baseline and acceptance boundary
+
+The isolated native WKWebView runner loads the existing production frontend
+and shared Transcript with `?mock=bench&bench=1`; its website store is
+nonpersistent. It uses product question-navigation controls and observes the
+Kernel's accepted/no-op landing transactions, never direct native scroll
+assignments. Physical `scrollTop` can legitimately stay unchanged when paged
+history rebases its origin, so that scalar is not used as a navigation oracle.
+Changed question identity, completed transactions and visible blocks are
+checked instead. Test-window activation uses ordinary LaunchServices; an
+unfocused/background result is rejected. Only an exactly owned temporary
+executable may be stopped during cleanup.
+
+Three serial fresh-WebView runs completed 27 navigation transactions across
+the 1,000-turn synthetic fixture: 258 sampled frames all contained visible
+blocks, with at most 40 block hosts. All page identity, nonblank, framework
+error-overlay, error/rejection, warning/error console and navigation checks
+passed at 1200×800; snapshots were inspected. Transaction landing times were
+54–83 ms. Frame callback interval P50 was 17 ms; each run had four intervals
+above 50 ms, with P95 39–45 ms and a worst interval of 71 ms. The diagnostic
+geometry probe itself is included in these timings.
+
+This is a baseline, **not a renderer speedup**. The WebKit runtime reports no
+Long Tasks API; rAF callback intervals cannot be called paint time, long-task
+CPU duration or FPS. No render/scroll policy was changed. Profiling the slow
+cold-navigation frames and larger Markdown/table/code workloads remains the
+next renderer investigation; these data do not yet isolate a specific CPU
+hotspot that warrants changing the guarded window/anchor implementation.
+The browser mock adapter is used, so these figures exclude the Tauri shell,
+Go/Rust IPC, model/network wait and real-history loading. They do not accept
+physical native wheel/trackpad input: the old local wheel host did not deliver
+input in this environment and its failed runs were excluded. The sustained
+native-input CI gate and other OSes remain separate acceptance conditions.
+
+The existing native CI assertion contract also records independent rAF cadence
+and geometry-probe cost, with unchanged sustained-workload pass gates. Its
+local micro gate now additionally requires real movement, mounted coverage,
+the existing mount budget and zero stale/reader-owned programmatic writes.
+It is never presented as a successful input gate merely because frames ran.
+
+Raw native samples, runtime identity and exact production asset/probe hashes
+are in [webview.json](evidence/2026-11-03-context-index/webview.json).
+Browser plugin was unavailable; the existing Playwright/installed-Chrome
+transcript browser suite separately passed selection, real wheel traversal,
+covered range, session replacement, safety, composer resize and IME checks.
+No new browser dependency was installed.
+
+```sh
+# Existing production frontend build required; macOS only, no native input.
+python3 tools/tauri/bench-transcript-native.py --output /tmp/reasonix-webview-measurement
+# Run in desktop/frontend using the already installed tsx dependency:
+node --import tsx bench/workbench-search.ts
+```
+
+### Review, validation and remaining scope
+
+The complete agent/provider/retrieval/historycatalog race suites passed (agent
+285.150 s), with vet passing. Independent differential fuzz runs passed
+128,831 token-text and 85,976 fingerprint inputs. Existing projection restart,
+legacy migration, system refresh, pinned provenance, signed reasoning and
+provider isolation tests remain authoritative. Full `test:transcript`,
+`test:transcript-browser`, native contract tests and build-contract checks
+passed. Repo-lint debt totals and per-file weights match the previous audit;
+the existing overall debt ceilings were not changed or represented as clean.
+
+The backend slice was reviewed and committed separately as `f44dc2e69`.
+0.1.76 packaging will use a clean final source commit, verify bundled code and
+notices, and protect the archived 0.1.75 rollback outside bundler cleanup.
+No install, TCC reset, push, paid model, capture or other-OS acceptance is part
+of this release. The achieved goal is the measured allocation fixes plus a
+reproducible search/renderer audit, not completion of every scenario in the
+original Rust migration table.

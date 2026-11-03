@@ -32,6 +32,8 @@
   const state = {
     transcript: null,
     frames: [],
+    frameTimes: [],
+    sampleCosts: [],
     active: false,
     growthTimer: 0,
     growthTicks: 0,
@@ -150,12 +152,41 @@
     return null;
   };
 
+  const sampleFrameTime = (time) => {
+    if (!state.active) return;
+    state.frameTimes.push(time);
+    requestAnimationFrame(sampleFrameTime);
+  };
+
+  const summarizeTimings = (values) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    const percentile = (fraction) => sorted.length ? sorted[Math.ceil(sorted.length * fraction) - 1] : null;
+    return { count: sorted.length, p50: percentile(0.5), p95: percentile(0.95), max: sorted.at(-1) ?? null };
+  };
+
+  const timingMetrics = () => {
+    const intervals = state.frameTimes.slice(1).map((time, index) => time - state.frameTimes[index]);
+    return {
+      rafIntervalsMs: summarizeTimings(intervals),
+      rafIntervalsOver50ms: intervals.filter(time => time > 50).length,
+      geometryProbeMs: summarizeTimings(state.sampleCosts),
+      visibility: document.visibilityState,
+      focused: document.hasFocus(),
+      viewport: { width: innerWidth, height: innerHeight },
+      userAgent: navigator.userAgent,
+      // rAF cadence includes compositor scheduling and the diagnostic probe;
+      // it does not measure paint duration, FPS, or unsupported long tasks.
+      measurement: "native-rAF-cadence-with-geometry-probe",
+    };
+  };
+
   const scheduleSample = () => {
     requestAnimationFrame(() => window.setTimeout(sample, 0));
   };
 
   const sample = () => {
     if (!state.active || !(state.transcript instanceof HTMLElement)) return;
+    const startedAt = performance.now();
     const element = state.transcript;
     const viewport = element.getBoundingClientRect();
     const rows = visibleRows(element);
@@ -213,6 +244,7 @@
       visible,
       blankGeometry,
     });
+    state.sampleCosts.push(performance.now() - startedAt);
     // ResizeObserver is delivered after rAF layout work but before paint.
     // Sample from the following task so the contract measures the geometry a
     // native WebView actually painted, not an intermediate pre-observer state.
@@ -641,6 +673,9 @@
     residentTail.append(growthSurface);
     state.transcript = element;
     state.frames = [];
+    state.frameTimes = [];
+    state.sampleCosts = [];
+    requestAnimationFrame(sampleFrameTime);
     state.active = true;
     state.lastWheelAt = Number.NEGATIVE_INFINITY;
     state.growthTicks = 0;
@@ -712,6 +747,7 @@
     const mountedCoverage = frames.length > 0 ? (frames.length - blankFrames.length) / frames.length : 0;
     const result = {
       type: "result",
+      timings: timingMetrics(),
       passed: frames.length >= 20
         && lastTop > firstTop + 96
         && maxReverse <= 4
@@ -780,7 +816,13 @@
     const heights = frames.map((frame) => frame.height);
     const result = {
       type: "result",
-      passed: state.wheelEvents > 0 && frames.length > 0,
+      timings: timingMetrics(),
+      passed: state.wheelEvents > 0 && frames.length > 0
+        && (frames.at(-1)?.top ?? 0) > (frames[0]?.top ?? 0) + 1
+        && blankFrames.length === 0
+        && frames.every(frame => frame.mountedCount <= 40)
+        && state.programmaticReaderWrites === 0
+        && state.staleGenerationWrites === 0,
       rows: Number.parseInt(element?.dataset.transcriptRowCount ?? "0", 10),
       frames: frames.length,
       totalFrames: frames.length,
