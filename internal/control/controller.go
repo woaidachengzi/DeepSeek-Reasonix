@@ -4350,6 +4350,17 @@ func (c *Controller) History() []provider.Message {
 	return c.executor.Session().Snapshot() // copy — a turn may be appending concurrently
 }
 
+// HistoryDelta captures one executor Session and atomically reads its append
+// suffix. The cursor includes Session identity, so resume or a same-path reload
+// requires a fresh projection even when counts and versions happen to match.
+func (c *Controller) HistoryDelta(previous agent.SessionHistoryCursor) ([]provider.Message, agent.SessionHistoryCursor, bool) {
+	var session *agent.Session
+	if c != nil && c.executor != nil {
+		session = c.executor.Session()
+	}
+	return session.HistoryDelta(previous)
+}
+
 // SessionHasUnsavedChanges tells desktop history whether it may safely refresh
 // an idle view from the durable WAL. A failed or contended save can leave the
 // controller with a newer in-memory transcript; replacing that view from disk

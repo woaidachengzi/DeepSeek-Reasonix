@@ -286,10 +286,15 @@ func (s *Session) ensureMessageIDsForSave(msgs []provider.Message) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	changed := false
 	for i := range msgs {
 		if i < len(s.Messages) && s.Messages[i].ID == "" && messagesEqualForStorage(s.Messages[i], msgs[i]) {
 			s.Messages[i].ID = msgs[i].ID
+			changed = true
 		}
+	}
+	if changed {
+		s.historyEpoch++
 	}
 }
 

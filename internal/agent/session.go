@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"reasonix/internal/provider"
 )
@@ -22,6 +23,14 @@ type Session struct {
 	Messages       []provider.Message
 	version        uint64
 	rewriteVersion int // bumped each time the log is rewritten (compact/fold)
+	// historyEpoch fences in-memory prefix changes that are not persisted-history
+	// rewrites, including Replace, unpersisted tool guards and save-time ID repair.
+	// It is independent of rewriteVersion so display readers cannot change save
+	// conflict classification merely by requiring a stricter append-only fence.
+	historyEpoch uint64
+	// historyIdentity lets cursors recognize replacement sessions without
+	// retaining this Session or its private transcript after an executor swap.
+	historyIdentity atomic.Pointer[sessionHistoryIdentity]
 	// persistedRewriteVersion is the highest rewriteVersion whose transcript
 	// has fully reached disk. It lives on the Session — not on the controller
 	// — so swapping session objects can never orphan or misattribute the
@@ -303,6 +312,7 @@ func (s *Session) Replace(msgs []provider.Message) {
 	mintMessageIDs(msgs)
 	s.Messages = msgs
 	s.version++
+	s.historyEpoch++
 }
 
 // Rewrite atomically replaces the message log and marks it as a rewrite. The

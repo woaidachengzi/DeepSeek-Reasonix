@@ -27,6 +27,7 @@ func (s *Session) updateBatchGuardResults(calls []provider.ToolCall, results []s
 	}
 	if changed {
 		s.version++
+		s.historyEpoch++
 	}
 	if durableChange {
 		s.rewriteVersion++

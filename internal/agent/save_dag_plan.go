@@ -268,9 +268,14 @@ func (p *dagWritePlan) applyIDRenames(s *Session) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	changed := false
 	for i := range s.Messages {
-		if fresh, ok := p.renames[s.Messages[i].ID]; ok {
+		if fresh, ok := p.renames[s.Messages[i].ID]; ok && fresh != s.Messages[i].ID {
 			s.Messages[i].ID = fresh
+			changed = true
 		}
+	}
+	if changed {
+		s.historyEpoch++
 	}
 }

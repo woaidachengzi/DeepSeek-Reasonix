@@ -219,6 +219,15 @@ type HistoryView struct {
 
 const maxHistoryMessages = 200
 
+// RuntimeHistoryPageProvider avoids constructing the full display transcript
+// when only its newest page is needed. Both results must describe the same
+// snapshot: at most limit newest messages and the total projected message count.
+// Returned data must remain unchanged after return; the manager copies it before
+// exposing it to callers. Runtimes without this optional surface use History.
+type RuntimeHistoryPageProvider interface {
+	HistoryPage(limit int) (messages []HistoryMessage, total int)
+}
+
 // Runtime is the minimal core lifecycle surface needed by the first bridge
 // vertical slices. Implementations must make Shutdown durable before releasing
 // their core resources.
@@ -953,19 +962,23 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 	if m.runtime == nil || sessionID == "" || m.view.ID != sessionID {
 		return HistoryView{}, ErrSessionNotFound
 	}
-	messages := m.runtime.History()
-	total := len(messages)
-	start := 0
-	if total > maxHistoryMessages {
-		start = total - maxHistoryMessages
+	var messages []HistoryMessage
+	var total int
+	provider, bounded := m.runtime.(RuntimeHistoryPageProvider)
+	if bounded {
+		messages, total = provider.HistoryPage(maxHistoryMessages)
 	}
-	page := append([]HistoryMessage(nil), messages[start:]...)
-	// The protocol models messages as a JSON array. Keep the empty case as []
-	// rather than nil so Go's JSON encoder does not emit `null` (Rust expects a
-	// sequence when decoding BridgeHistoryResponse).
-	if page == nil {
-		page = []HistoryMessage{}
+	if !bounded || total < len(messages) || len(messages) > maxHistoryMessages {
+		// An invalid optional page must not corrupt the existing wire contract.
+		// Fall back to the established projection for legacy and faulty providers.
+		messages = m.runtime.History()
+		total = len(messages)
+		if total > maxHistoryMessages {
+			messages = messages[total-maxHistoryMessages:]
+		}
 	}
+	start := total - len(messages)
+	page := cloneHistoryMessages(messages)
 	view := m.view
 	view.State = m.runtime.State()
 	return HistoryView{
@@ -974,6 +987,29 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 		StartIndex:    start,
 		TotalMessages: total,
 	}, nil
+}
+
+// Keep provider-owned caches isolated from callers, including nested usage
+// counters. make also preserves the protocol's [] rather than null empty page.
+func cloneHistoryMessages(messages []HistoryMessage) []HistoryMessage {
+	page := make([]HistoryMessage, len(messages))
+	copy(page, messages)
+	for i := range page {
+		if page[i].TurnUsage == nil {
+			continue
+		}
+		usage := *page[i].TurnUsage
+		if usage.CacheHitTokens != nil {
+			value := *usage.CacheHitTokens
+			usage.CacheHitTokens = &value
+		}
+		if usage.CacheMissTokens != nil {
+			value := *usage.CacheMissTokens
+			usage.CacheMissTokens = &value
+		}
+		page[i].TurnUsage = &usage
+	}
+	return page
 }
 
 // Submit starts a turn on the bridge-owned runtime. It intentionally returns

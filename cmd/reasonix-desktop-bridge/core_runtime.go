@@ -484,6 +484,7 @@ func bridgeSessionPath(sessionDir, sessionID string) (string, error) {
 // controllerRuntime adapts the established controller to the bridge's minimal
 // Runtime surface.
 type controllerRuntime struct {
+	historyCache        bridgeHistoryCache
 	liveCompactRatio    *liveCompactionSettings
 	effort              string
 	controller          *control.Controller
@@ -1103,6 +1104,10 @@ func bridgeHistoryMessageContent(message provider.Message) string {
 // of those are a safe or stable first bridge contract.
 func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
 	return projectBridgeHistory(r.controller.History())
+}
+
+func (r *controllerRuntime) HistoryPage(limit int) ([]desktopbridge.HistoryMessage, int) {
+	return r.historyCache.page(r.controller, limit)
 }
 
 func projectBridgeHistory(history []provider.Message) []desktopbridge.HistoryMessage {
