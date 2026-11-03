@@ -1,0 +1,645 @@
+{
+  "baseline_commit": "c8c68f599209be3dc2e4259285ee1c0356574df6",
+  "head": "74ee0f185a6efd10638a8aeac6d90524c3b12721",
+  "worktree_dirty": true,
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "go": "go version go1.27.3 darwin/arm64",
+  "rust": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "source_sha256": {
+    "internal/desktopbridge/ledger.go": "c2e4cdf20b01e74178de04ef0c2180cdb817a9f9684526d6dd16b65d4309ee3e",
+    "internal/desktopbridge/live_state.go": "691edb5f96bf96703391d74e47f43e3ee4b7a4de1f8b95d25e8cb591929376df",
+    "desktop/tauri/src/bridge/http_response.rs": "02248586df08eb40029391db9f12c152791f6a9ba548a93aaaa47a2f4b8036e9",
+    "desktop/tauri/src/terminal.rs": "bc10becdb594944f58295c09eaa888ed6471d7241f1eb6c1d106fa2710fe2240",
+    "desktop/cua-runtime/src/preview.rs": "07e0160b652ad21c7f30a3398c07375a7fe0f38aa55b6ce4ce2bed9d5ae8fca7",
+    "internal/computeruse/cua_preview.go": "09af47d9844f1e52923c6244852491979ca79fc846d5c5118149d912d095ca36",
+    "internal/computeruse/cua_preview_bench_test.go": "2648b883d06c9cff46b9a10208697b3c83da19408ee057673c7004be8221f58a"
+  },
+  "history": {
+    "profile": "release",
+    "results": [
+      {
+        "allocation_measure": "current-thread cumulative requested bytes, including realloc; excludes input fixture and is not peak RSS",
+        "case": "small_text",
+        "characters_per_message": 64,
+        "contract_equal": true,
+        "direct_alloc_calls": 615,
+        "direct_allocated_bytes": 121572,
+        "direct_median_ns": 101563,
+        "http_bytes": 44841,
+        "iterations_per_sample": 300,
+        "messages": 200,
+        "old_alloc_calls": 2030,
+        "old_allocated_bytes": 217251,
+        "old_median_ns": 153605,
+        "samples_per_route": 7,
+        "speedup": 1.5124110158226913
+      },
+      {
+        "allocation_measure": "current-thread cumulative requested bytes, including realloc; excludes input fixture and is not peak RSS",
+        "case": "large_text",
+        "characters_per_message": 16000,
+        "contract_equal": true,
+        "direct_alloc_calls": 623,
+        "direct_allocated_bytes": 4877172,
+        "direct_median_ns": 8984093,
+        "http_bytes": 5143641,
+        "iterations_per_sample": 8,
+        "messages": 200,
+        "old_alloc_calls": 2038,
+        "old_allocated_bytes": 4972851,
+        "old_median_ns": 9086708,
+        "samples_per_route": 7,
+        "speedup": 1.0114218541593458
+      }
+    ],
+    "scope": "production HTTP decode plus generated history DTO, excluding network/Go projection/Tauri IPC"
+  },
+  "terminal": {
+    "allocation_count_iterations": 10,
+    "cases": [
+      {
+        "baseline_allocated_bytes_per_call": 1572,
+        "baseline_allocations_per_call": 14,
+        "baseline_ns_per_call_median": 262.91916599999996,
+        "baseline_ns_per_call_samples": [
+          256.911082,
+          259.16425,
+          259.35625,
+          262.91916599999996,
+          263.27099999999996,
+          270.529082,
+          309.910166
+        ],
+        "current_allocated_bytes_per_call": 0,
+        "current_allocations_per_call": 0,
+        "current_ns_per_call_median": 1.542416,
+        "current_ns_per_call_samples": [
+          1.484,
+          1.492416,
+          1.516166,
+          1.542416,
+          1.557918,
+          1.574584,
+          1.643666
+        ],
+        "iterations_per_sample": 500000,
+        "kind": "text",
+        "payload_text_bytes": 256,
+        "samples": 7
+      },
+      {
+        "baseline_allocated_bytes_per_call": 66870,
+        "baseline_allocations_per_call": 14,
+        "baseline_ns_per_call_median": 1202.1209,
+        "baseline_ns_per_call_samples": [
+          1190.3083,
+          1193.0541,
+          1197.5625,
+          1202.1209,
+          1205.3625,
+          1232.3625,
+          1252.6125
+        ],
+        "current_allocated_bytes_per_call": 0,
+        "current_allocations_per_call": 0,
+        "current_ns_per_call_median": 1.5083,
+        "current_ns_per_call_samples": [
+          1.3833,
+          1.3875,
+          1.5083,
+          1.5083,
+          1.5166,
+          1.5291,
+          1.5417000000000003
+        ],
+        "iterations_per_sample": 10000,
+        "kind": "tool_progress",
+        "payload_text_bytes": 65536,
+        "samples": 7
+      },
+      {
+        "baseline_allocated_bytes_per_call": 1049906,
+        "baseline_allocations_per_call": 14,
+        "baseline_ns_per_call_median": 16092.917000000001,
+        "baseline_ns_per_call_samples": [
+          15474.459,
+          16022.459,
+          16081.166,
+          16092.917000000001,
+          16430.583,
+          23976.5,
+          49598.542
+        ],
+        "current_allocated_bytes_per_call": 0,
+        "current_allocations_per_call": 0,
+        "current_ns_per_call_median": 1.791,
+        "current_ns_per_call_samples": [
+          1.542,
+          1.583,
+          1.667,
+          1.791,
+          1.792,
+          1.834,
+          1.834
+        ],
+        "iterations_per_sample": 1000,
+        "kind": "tool_result",
+        "payload_text_bytes": 1048576,
+        "samples": 7
+      }
+    ],
+    "latency_allocation_tracking": false,
+    "scope": "router only; event construction, JSON decode/IPC and UI rendering excluded"
+  },
+  "go_sample_order": [
+    [
+      "baseline",
+      "current"
+    ],
+    [
+      "current",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "current"
+    ]
+  ],
+  "go_baseline": [
+    {
+      "name": "BenchmarkEventStreamTextBurst/512",
+      "iterations": 339,
+      "ns_per_op": 751041.0,
+      "go_bytes_per_op": 1815033,
+      "go_allocs_per_op": 3105
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/2048",
+      "iterations": 27,
+      "ns_per_op": 7493665.0,
+      "go_bytes_per_op": 20464520,
+      "go_allocs_per_op": 12428
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/4096",
+      "iterations": 10,
+      "ns_per_op": 23355092.0,
+      "go_bytes_per_op": 75971917,
+      "go_allocs_per_op": 25011
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1",
+      "iterations": 8841447,
+      "ns_per_op": 24.38,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1024",
+      "iterations": 282908,
+      "ns_per_op": 923.8,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/512",
+      "iterations": 331,
+      "ns_per_op": 678121.0,
+      "go_bytes_per_op": 1814666,
+      "go_allocs_per_op": 3104
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/2048",
+      "iterations": 39,
+      "ns_per_op": 6458579.0,
+      "go_bytes_per_op": 20462609,
+      "go_allocs_per_op": 12425
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/4096",
+      "iterations": 13,
+      "ns_per_op": 17249128.0,
+      "go_bytes_per_op": 75984486,
+      "go_allocs_per_op": 25024
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1",
+      "iterations": 10945368,
+      "ns_per_op": 21.86,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1024",
+      "iterations": 285771,
+      "ns_per_op": 830.9,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/512",
+      "iterations": 369,
+      "ns_per_op": 641700.0,
+      "go_bytes_per_op": 1814813,
+      "go_allocs_per_op": 3104
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/2048",
+      "iterations": 44,
+      "ns_per_op": 5422250.0,
+      "go_bytes_per_op": 20463946,
+      "go_allocs_per_op": 12426
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/4096",
+      "iterations": 13,
+      "ns_per_op": 17969051.0,
+      "go_bytes_per_op": 75966971,
+      "go_allocs_per_op": 25001
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1",
+      "iterations": 10472269,
+      "ns_per_op": 23.51,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1024",
+      "iterations": 266593,
+      "ns_per_op": 1090.0,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    }
+  ],
+  "go_current": [
+    {
+      "name": "BenchmarkEventStreamTextBurst/512",
+      "iterations": 388,
+      "ns_per_op": 559899.0,
+      "go_bytes_per_op": 704798,
+      "go_allocs_per_op": 2598
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/2048",
+      "iterations": 100,
+      "ns_per_op": 2220536.0,
+      "go_bytes_per_op": 2737724,
+      "go_allocs_per_op": 10298
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/4096",
+      "iterations": 58,
+      "ns_per_op": 4084417.0,
+      "go_bytes_per_op": 5197151,
+      "go_allocs_per_op": 20554
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1",
+      "iterations": 12700316,
+      "ns_per_op": 19.83,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1024",
+      "iterations": 9786879,
+      "ns_per_op": 21.92,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/512",
+      "iterations": 472,
+      "ns_per_op": 503168.0,
+      "go_bytes_per_op": 704503,
+      "go_allocs_per_op": 2597
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/2048",
+      "iterations": 121,
+      "ns_per_op": 2029383.0,
+      "go_bytes_per_op": 2737902,
+      "go_allocs_per_op": 10298
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/4096",
+      "iterations": 45,
+      "ns_per_op": 5060544.0,
+      "go_bytes_per_op": 5197824,
+      "go_allocs_per_op": 20555
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1",
+      "iterations": 11202693,
+      "ns_per_op": 23.09,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1024",
+      "iterations": 8712513,
+      "ns_per_op": 24.15,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/512",
+      "iterations": 432,
+      "ns_per_op": 492133.0,
+      "go_bytes_per_op": 704933,
+      "go_allocs_per_op": 2598
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/2048",
+      "iterations": 123,
+      "ns_per_op": 1904276.0,
+      "go_bytes_per_op": 2737551,
+      "go_allocs_per_op": 10297
+    },
+    {
+      "name": "BenchmarkEventStreamTextBurst/4096",
+      "iterations": 64,
+      "ns_per_op": 3742913.0,
+      "go_bytes_per_op": 5197033,
+      "go_allocs_per_op": 20554
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1",
+      "iterations": 13267669,
+      "ns_per_op": 18.29,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    },
+    {
+      "name": "BenchmarkEventLedgerAppend/capacity1024",
+      "iterations": 12707125,
+      "ns_per_op": 19.74,
+      "go_bytes_per_op": 48,
+      "go_allocs_per_op": 1
+    }
+  ],
+  "preview_pipeline": [
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 4854244.0,
+      "go_bytes_per_op": 2505082,
+      "go_allocs_per_op": 144091
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 4199424.0,
+      "go_bytes_per_op": 2504356,
+      "go_allocs_per_op": 144090
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 3949131.0,
+      "go_bytes_per_op": 2505062,
+      "go_allocs_per_op": 144091
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_png/rust",
+      "iterations": 30,
+      "ns_per_op": 3597235.0,
+      "go_bytes_per_op": 946892,
+      "go_allocs_per_op": 40
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_png/rust",
+      "iterations": 30,
+      "ns_per_op": 3646612.0,
+      "go_bytes_per_op": 947954,
+      "go_allocs_per_op": 43
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_png/rust",
+      "iterations": 30,
+      "ns_per_op": 3593844.0,
+      "go_bytes_per_op": 948132,
+      "go_allocs_per_op": 43
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 6250174.0,
+      "go_bytes_per_op": 2579233,
+      "go_allocs_per_op": 288046
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 6411331.0,
+      "go_bytes_per_op": 2578169,
+      "go_allocs_per_op": 288044
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 6332757.0,
+      "go_bytes_per_op": 2579046,
+      "go_allocs_per_op": 288046
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 4095461.0,
+      "go_bytes_per_op": 1004733,
+      "go_allocs_per_op": 39
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 4747268.0,
+      "go_bytes_per_op": 1004921,
+      "go_allocs_per_op": 40
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/640x400_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 4514499.0,
+      "go_bytes_per_op": 1004914,
+      "go_allocs_per_op": 40
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 13025208.0,
+      "go_bytes_per_op": 10200795,
+      "go_allocs_per_op": 132120
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 12161799.0,
+      "go_bytes_per_op": 10200434,
+      "go_allocs_per_op": 132119
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 12623546.0,
+      "go_bytes_per_op": 10200785,
+      "go_allocs_per_op": 132120
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_png/rust",
+      "iterations": 30,
+      "ns_per_op": 8204393.0,
+      "go_bytes_per_op": 898612,
+      "go_allocs_per_op": 41
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_png/rust",
+      "iterations": 30,
+      "ns_per_op": 8106086.0,
+      "go_bytes_per_op": 898253,
+      "go_allocs_per_op": 41
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_png/rust",
+      "iterations": 30,
+      "ns_per_op": 7757768.0,
+      "go_bytes_per_op": 898608,
+      "go_allocs_per_op": 41
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 19778422.0,
+      "go_bytes_per_op": 6502888,
+      "go_allocs_per_op": 259260
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 19787699.0,
+      "go_bytes_per_op": 6503055,
+      "go_allocs_per_op": 259260
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 19234068.0,
+      "go_bytes_per_op": 6502514,
+      "go_allocs_per_op": 259259
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 10641022.0,
+      "go_bytes_per_op": 1280705,
+      "go_allocs_per_op": 43
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 11071636.0,
+      "go_bytes_per_op": 1280717,
+      "go_allocs_per_op": 43
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1920x1080_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 11393672.0,
+      "go_bytes_per_op": 1281072,
+      "go_allocs_per_op": 44
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 13614082.0,
+      "go_bytes_per_op": 10178136,
+      "go_allocs_per_op": 130442
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 12497806.0,
+      "go_bytes_per_op": 10178679,
+      "go_allocs_per_op": 130444
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_png/legacy",
+      "iterations": 30,
+      "ns_per_op": 12549875.0,
+      "go_bytes_per_op": 10177785,
+      "go_allocs_per_op": 130442
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_png/rust",
+      "iterations": 30,
+      "ns_per_op": 7916475.0,
+      "go_bytes_per_op": 947784,
+      "go_allocs_per_op": 42
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_png/rust",
+      "iterations": 30,
+      "ns_per_op": 7418614.0,
+      "go_bytes_per_op": 947778,
+      "go_allocs_per_op": 42
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_png/rust",
+      "iterations": 30,
+      "ns_per_op": 7372514.0,
+      "go_bytes_per_op": 948061,
+      "go_allocs_per_op": 43
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 19562285.0,
+      "go_bytes_per_op": 6617586,
+      "go_allocs_per_op": 259261
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 19889560.0,
+      "go_bytes_per_op": 6617242,
+      "go_allocs_per_op": 259261
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_jpeg/legacy",
+      "iterations": 30,
+      "ns_per_op": 19986965.0,
+      "go_bytes_per_op": 6617597,
+      "go_allocs_per_op": 259261
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 11907065.0,
+      "go_bytes_per_op": 1358023,
+      "go_allocs_per_op": 43
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 10874479.0,
+      "go_bytes_per_op": 1358730,
+      "go_allocs_per_op": 45
+    },
+    {
+      "name": "BenchmarkCuaPreviewPipeline/1080x1920_jpeg/rust",
+      "iterations": 30,
+      "ns_per_op": 11609501.0,
+      "go_bytes_per_op": 1358367,
+      "go_allocs_per_op": 44
+    }
+  ],
+  "limits": [
+    "Synthetic public fixtures only; no models, network, user screenshots or input.",
+    "History/terminal timing excludes IPC, Go projection and renderer.",
+    "Preview includes a warm worker, full image JSON/pipe/Go decode and validation; excludes SDK capture and startup.",
+    "Allocation counters are cumulative bytes allocated, not retained heap or whole-application RSS.",
+    "Go allocation counters exclude the Rust worker; Rust counters belong to isolated single-thread benchmark binaries.",
+    "Wall-clock ratios describe these workloads on this machine, not universal language performance."
+  ]
+}

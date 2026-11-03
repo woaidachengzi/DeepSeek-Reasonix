@@ -238,6 +238,11 @@ Wails adapter 运行时仍经 `window.go.main.App`，前端其余直接 runtime 
 
 ## 6. Rust 化 Go core 的准入规则
 
+2026-11-03 的首批性能切片、离线对照数据及剩余边界见
+[`RUST_HOT_PATH_PILOT.md`](RUST_HOT_PATH_PILOT.md)。只读截图缩略图计算已从
+Go 迁入现有 Rust worker；历史/事件减少重复转换和复制，Go 会话写入及 Agent
+所有权保持不变。此记录不把该切片视为整个 Go core 已迁移。
+
 Tauri host 完成不等于应重写 Go core。每个候选模块必须有：稳定边界、行为测试、
 数据格式说明、可单独切换的 feature flag，以及可逆回退路径。
 
