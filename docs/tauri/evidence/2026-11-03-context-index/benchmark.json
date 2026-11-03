@@ -1,0 +1,638 @@
+{
+  "baseline_commit": "ab07af612736cab0fa4d730075115abf18a30f01",
+  "candidate_commit": "ab07af612736cab0fa4d730075115abf18a30f01",
+  "candidate_status": "M desktop/cmd/transcript-native-smoke/host_darwin.m\n M desktop/transcript_native_smoke_contract.js\n M internal/agent/projection.go\n M internal/historycatalog/documents.go\n?? internal/agent/projection_fingerprint.go\n?? internal/agent/projection_fingerprint_test.go\n?? internal/historycatalog/documents_benchmark_test.go\n?? internal/retrieval/token_text.go\n?? internal/retrieval/token_text_test.go\n?? tools/tauri/bench-context-index.py",
+  "source_sha256": {
+    "internal/agent/projection_fingerprint_test.go": "146e6c1da4c8879da3f1af4d4245fdcc5b902b759935676eeb4244b1161ee69c",
+    "internal/historycatalog/documents_benchmark_test.go": "721168363498fc4a811ad03d45e0dbed01b56a94dc060cbb859d62a2761e6fc7",
+    "internal/agent/projection.go": "2814c08091a5de49ea1cb661db4b498b013906cdb46012ebb79066c45832aaf0",
+    "internal/agent/projection_fingerprint.go": "19954aa23408ca80171354a8d806d7566ba42819954f97915641b794f1d3b8a4",
+    "internal/agent/sampling_request.go": "005f2131919d0449f3c3deeae7d1dc32f0da828ebd1c578c9beadea352c48321",
+    "internal/agent/computeruse_context.go": "6d7282dc9eba61d4bd0add3a29cb1ef8c723128ac799b86adf6bde213240a96a",
+    "internal/provider/projection.go": "b03d6948d618393b04605162f8e5657a5b70f8cfcbaf14cfe47845afd4d865b6",
+    "internal/provider/provider.go": "34fe03d4a7eedc1957551d97b33f6d0fa6c35f6052577bf9395446c4c56ae0a9",
+    "internal/historycatalog/documents.go": "ffc244378701f4f5d1b75484edf1f435d6f2ad095c72cdb9226fa0ebbcc60437",
+    "internal/historycatalog/benchmark_test.go": "86db590be3a96b3a5d47bc601dd28b467217278edbdf760dd7eff7637dcdfb54",
+    "internal/historycatalog/catalog.go": "9e0bb4372052c837b0210172326e3af2a7e122d3b01d325b3f118eb182b4e398",
+    "internal/retrieval/bm25.go": "ac6bba372d1a3b6a5b71b15418dee130d7ce8507da82d2c2d70cf05e75fc1d51",
+    "internal/retrieval/token_text.go": "4dd1e7bd0b4cd5cce2a88d97e6134e55d69b9379e69042b10a0bfc58700031a9"
+  },
+  "harness_sha256": "b28d5f289c30c30035a9b5c68106844a14f3b1e19c8ed75f41f7eb377e20f1c8",
+  "go": "go version go1.27.3 darwin/arm64",
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+  "rounds": 5,
+  "iterations": 10,
+  "samples": {
+    "baseline": [
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 367933.0,
+          "go_bytes_per_op": 537258,
+          "go_allocs_per_op": 110
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 17410250.0,
+          "go_bytes_per_op": 14439332,
+          "go_allocs_per_op": 5006
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 87322583.0,
+          "go_bytes_per_op": 292425640,
+          "go_allocs_per_op": 25043
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 22873504.0,
+          "go_bytes_per_op": 62860616,
+          "go_allocs_per_op": 10036
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 16759642.0,
+          "go_bytes_per_op": 56665,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 134432146.0,
+          "go_bytes_per_op": 63527121,
+          "go_allocs_per_op": 911012
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 130211050.0,
+          "go_bytes_per_op": 105383741,
+          "go_allocs_per_op": 1424013
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 416658.0,
+          "go_bytes_per_op": 537258,
+          "go_allocs_per_op": 110
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 18777117.0,
+          "go_bytes_per_op": 40627331,
+          "go_allocs_per_op": 5025
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 97865925.0,
+          "go_bytes_per_op": 229499354,
+          "go_allocs_per_op": 25032
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 22241062.0,
+          "go_bytes_per_op": 75954092,
+          "go_allocs_per_op": 10045
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 21682683.0,
+          "go_bytes_per_op": 56684,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 170875521.0,
+          "go_bytes_per_op": 63527096,
+          "go_allocs_per_op": 911012
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 150836967.0,
+          "go_bytes_per_op": 105383698,
+          "go_allocs_per_op": 1424013
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 563079.0,
+          "go_bytes_per_op": 537258,
+          "go_allocs_per_op": 110
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 19678029.0,
+          "go_bytes_per_op": 40626775,
+          "go_allocs_per_op": 5024
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 99553650.0,
+          "go_bytes_per_op": 166574184,
+          "go_allocs_per_op": 25022
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 24692662.0,
+          "go_bytes_per_op": 69407269,
+          "go_allocs_per_op": 10040
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 24524075.0,
+          "go_bytes_per_op": 56667,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 184609688.0,
+          "go_bytes_per_op": 63528220,
+          "go_allocs_per_op": 911014
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 161877458.0,
+          "go_bytes_per_op": 105383225,
+          "go_allocs_per_op": 1424013
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 393467.0,
+          "go_bytes_per_op": 655749,
+          "go_allocs_per_op": 113
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 15651350.0,
+          "go_bytes_per_op": 20986229,
+          "go_allocs_per_op": 5010
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 93127767.0,
+          "go_bytes_per_op": 198037188,
+          "go_allocs_per_op": 25027
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 24019467.0,
+          "go_bytes_per_op": 69407301,
+          "go_allocs_per_op": 10040
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 19904754.0,
+          "go_bytes_per_op": 56664,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 170533842.0,
+          "go_bytes_per_op": 63527115,
+          "go_allocs_per_op": 911012
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 145757596.0,
+          "go_bytes_per_op": 105383725,
+          "go_allocs_per_op": 1424013
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 370175.0,
+          "go_bytes_per_op": 418767,
+          "go_allocs_per_op": 108
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 19214408.0,
+          "go_bytes_per_op": 40627332,
+          "go_allocs_per_op": 5025
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 109450358.0,
+          "go_bytes_per_op": 135110903,
+          "go_allocs_per_op": 25016
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 29435104.0,
+          "go_bytes_per_op": 49766779,
+          "go_allocs_per_op": 10026
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 19028579.0,
+          "go_bytes_per_op": 56673,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 141712229.0,
+          "go_bytes_per_op": 63527094,
+          "go_allocs_per_op": 911012
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 162678371.0,
+          "go_bytes_per_op": 105383177,
+          "go_allocs_per_op": 1424013
+        }
+      ]
+    ],
+    "candidate": [
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 346058.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 16564954.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 70501112.0,
+          "go_bytes_per_op": 1518,
+          "go_allocs_per_op": 8
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 17448267.0,
+          "go_bytes_per_op": 14747812,
+          "go_allocs_per_op": 5019
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 17863504.0,
+          "go_bytes_per_op": 56660,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 119756125.0,
+          "go_bytes_per_op": 37799600,
+          "go_allocs_per_op": 16013
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 111085996.0,
+          "go_bytes_per_op": 60455078,
+          "go_allocs_per_op": 18012
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 312458.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 19679271.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 97429458.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 22768967.0,
+          "go_bytes_per_op": 14748455,
+          "go_allocs_per_op": 5020
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 15895921.0,
+          "go_bytes_per_op": 56675,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 132773667.0,
+          "go_bytes_per_op": 37799054,
+          "go_allocs_per_op": 16012
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 106074350.0,
+          "go_bytes_per_op": 60455052,
+          "go_allocs_per_op": 18012
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 502079.0,
+          "go_bytes_per_op": 678,
+          "go_allocs_per_op": 6
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 19220158.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 91134425.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 24921525.0,
+          "go_bytes_per_op": 14747222,
+          "go_allocs_per_op": 5017
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 18526638.0,
+          "go_bytes_per_op": 56672,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 134682371.0,
+          "go_bytes_per_op": 37799070,
+          "go_allocs_per_op": 16012
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 103518354.0,
+          "go_bytes_per_op": 60455089,
+          "go_allocs_per_op": 18012
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 302283.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 16053588.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 75671004.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 18711738.0,
+          "go_bytes_per_op": 14748799,
+          "go_allocs_per_op": 5021
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 19270542.0,
+          "go_bytes_per_op": 56673,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 129087938.0,
+          "go_bytes_per_op": 37799599,
+          "go_allocs_per_op": 16013
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 104395317.0,
+          "go_bytes_per_op": 60455035,
+          "go_allocs_per_op": 18012
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkProjectionFingerprint/200",
+          "iterations": 10,
+          "ns_per_op": 312246.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/10000",
+          "iterations": 10,
+          "ns_per_op": 14904508.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkProjectionFingerprint/50000",
+          "iterations": 10,
+          "ns_per_op": 81900354.0,
+          "go_bytes_per_op": 1089,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCoveredProjectionHash",
+          "iterations": 10,
+          "ns_per_op": 19487438.0,
+          "go_bytes_per_op": 14747756,
+          "go_allocs_per_op": 5019
+        },
+        {
+          "name": "BenchmarkWarmSearchTenThousandSources",
+          "iterations": 10,
+          "ns_per_op": 18932917.0,
+          "go_bytes_per_op": 56680,
+          "go_allocs_per_op": 770
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/latin",
+          "iterations": 10,
+          "ns_per_op": 136817392.0,
+          "go_bytes_per_op": 37799594,
+          "go_allocs_per_op": 16013
+        },
+        {
+          "name": "BenchmarkHistoryDocuments/mixed",
+          "iterations": 10,
+          "ns_per_op": 100327121.0,
+          "go_bytes_per_op": 60455081,
+          "go_allocs_per_op": 18012
+        }
+      ]
+    ]
+  },
+  "medians": {
+    "baseline": [
+      {
+        "name": "BenchmarkProjectionFingerprint/200",
+        "ns_per_op": 393467.0,
+        "go_bytes_per_op": 537258,
+        "go_allocs_per_op": 110
+      },
+      {
+        "name": "BenchmarkProjectionFingerprint/10000",
+        "ns_per_op": 18777117.0,
+        "go_bytes_per_op": 40626775,
+        "go_allocs_per_op": 5024
+      },
+      {
+        "name": "BenchmarkProjectionFingerprint/50000",
+        "ns_per_op": 97865925.0,
+        "go_bytes_per_op": 198037188,
+        "go_allocs_per_op": 25027
+      },
+      {
+        "name": "BenchmarkCoveredProjectionHash",
+        "ns_per_op": 24019467.0,
+        "go_bytes_per_op": 69407269,
+        "go_allocs_per_op": 10040
+      },
+      {
+        "name": "BenchmarkWarmSearchTenThousandSources",
+        "ns_per_op": 19904754.0,
+        "go_bytes_per_op": 56667,
+        "go_allocs_per_op": 770
+      },
+      {
+        "name": "BenchmarkHistoryDocuments/latin",
+        "ns_per_op": 170533842.0,
+        "go_bytes_per_op": 63527115,
+        "go_allocs_per_op": 911012
+      },
+      {
+        "name": "BenchmarkHistoryDocuments/mixed",
+        "ns_per_op": 150836967.0,
+        "go_bytes_per_op": 105383698,
+        "go_allocs_per_op": 1424013
+      }
+    ],
+    "candidate": [
+      {
+        "name": "BenchmarkProjectionFingerprint/200",
+        "ns_per_op": 312458.0,
+        "go_bytes_per_op": 1089,
+        "go_allocs_per_op": 7
+      },
+      {
+        "name": "BenchmarkProjectionFingerprint/10000",
+        "ns_per_op": 16564954.0,
+        "go_bytes_per_op": 1089,
+        "go_allocs_per_op": 7
+      },
+      {
+        "name": "BenchmarkProjectionFingerprint/50000",
+        "ns_per_op": 81900354.0,
+        "go_bytes_per_op": 1089,
+        "go_allocs_per_op": 7
+      },
+      {
+        "name": "BenchmarkCoveredProjectionHash",
+        "ns_per_op": 19487438.0,
+        "go_bytes_per_op": 14747812,
+        "go_allocs_per_op": 5019
+      },
+      {
+        "name": "BenchmarkWarmSearchTenThousandSources",
+        "ns_per_op": 18526638.0,
+        "go_bytes_per_op": 56673,
+        "go_allocs_per_op": 770
+      },
+      {
+        "name": "BenchmarkHistoryDocuments/latin",
+        "ns_per_op": 132773667.0,
+        "go_bytes_per_op": 37799594,
+        "go_allocs_per_op": 16013
+      },
+      {
+        "name": "BenchmarkHistoryDocuments/mixed",
+        "ns_per_op": 104395317.0,
+        "go_bytes_per_op": 60455078,
+        "go_allocs_per_op": 18012
+      }
+    ]
+  },
+  "scope": "Synthetic in-process fingerprint, full covered-prefix normalization/hash, 1000-document indexing text and unchanged 10K-source FTS query. Setup excluded; warm-up discarded; serial alternating routes. Go bytes/op are cumulative allocations, not peak RSS. No model, disk persist, IPC, renderer or capture timing.",
+  "binary_sha256": {
+    "baseline-context": "3ac9c130fcca7ca4bd6c75ec783ef053d44100ae0013c1ccd569d3cc4ce19947",
+    "baseline-index": "e858252ff51b3827e75e41f954a4f838e08f1d66f7de286422161a5adf0b9515",
+    "candidate-context": "a7ea77618ba5d2dc7dfe9c4b16b3c937b24d07e4a7d81183db08a643ef6b51fc",
+    "candidate-index": "f589a0cf2c851f9101b09691330e067d2f3d74498e67293cfa3f3873a77db8e5"
+  }
+}

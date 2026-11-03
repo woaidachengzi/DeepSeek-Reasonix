@@ -409,67 +409,6 @@ func migrateLegacyCoveredPrefixHash(st *CompactionState, current, preRepair []pr
 	return true
 }
 
-// providerVisibleFingerprint is the stable hash of fields that reach a provider.
-func providerVisibleFingerprint(msgs []provider.Message) string {
-	type wireCall struct {
-		ID               string `json:"id,omitempty"`
-		Name             string `json:"name,omitempty"`
-		Arguments        string `json:"args,omitempty"`
-		ThoughtSignature string `json:"ts,omitempty"`
-	}
-	type wireMsg struct {
-		Role               string                      `json:"r"`
-		Content            string                      `json:"c,omitempty"`
-		Images             []string                    `json:"img,omitempty"`
-		ReasoningContent   string                      `json:"rc,omitempty"`
-		ReasoningID        string                      `json:"rid,omitempty"`
-		ReasoningStatus    string                      `json:"rst,omitempty"`
-		ReasoningSignature string                      `json:"rsig,omitempty"`
-		ToolCallID         string                      `json:"tid,omitempty"`
-		Name               string                      `json:"n,omitempty"`
-		ToolCalls          []wireCall                  `json:"tc,omitempty"`
-		ThinkingBlocks     []provider.ThinkingBlock    `json:"tb,omitempty"`
-		ResponsesItems     []json.RawMessage           `json:"ri,omitempty"`
-		ServerSearch       []provider.ServerSearchCall `json:"ss,omitempty"`
-	}
-	wire := make([]wireMsg, 0, len(msgs))
-	for _, m := range msgs {
-		wm := wireMsg{
-			Role:               string(m.Role),
-			Content:            m.Content,
-			Images:             append([]string(nil), m.Images...),
-			ReasoningContent:   m.ReasoningContent,
-			ReasoningID:        m.ReasoningID,
-			ReasoningStatus:    m.ReasoningStatus,
-			ReasoningSignature: m.ReasoningSignature,
-			ThinkingBlocks:     m.ThinkingBlocks,
-			ToolCallID:         m.ToolCallID,
-			Name:               m.Name,
-		}
-		for _, tc := range m.ToolCalls {
-			wm.ToolCalls = append(wm.ToolCalls, wireCall{
-				ID: tc.ID, Name: tc.Name, Arguments: tc.Arguments, ThoughtSignature: tc.ThoughtSignature,
-			})
-		}
-		if len(m.ResponsesItems) > 0 {
-			wm.ResponsesItems = make([]json.RawMessage, len(m.ResponsesItems))
-			for i, item := range m.ResponsesItems {
-				wm.ResponsesItems[i] = append(json.RawMessage(nil), item...)
-			}
-		}
-		if len(m.ServerSearch) > 0 {
-			wm.ServerSearch = append([]provider.ServerSearchCall(nil), m.ServerSearch...)
-		}
-		wire = append(wire, wm)
-	}
-	b, err := json.Marshal(wire)
-	if err != nil {
-		return ""
-	}
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:16])
-}
-
 // projectionValid reports whether st can be reused for the current transcript
 // and provider/model lineage. Fail closed: missing CoveredPrefixHash or a blank
 // sidecar PromptCacheKey when the current lineage key is known forces rebuild.

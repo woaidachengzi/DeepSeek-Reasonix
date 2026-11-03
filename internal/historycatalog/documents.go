@@ -50,11 +50,11 @@ type indexedDocument struct {
 func documents(messages []provider.Message) []indexedDocument {
 	out := []indexedDocument{}
 	appendDoc := func(message, part int, role, kind, tool, text string) {
-		terms := retrieval.Tokens(strings.TrimSpace(text))
-		if len(terms) == 0 {
+		terms, count := retrieval.TokenText(strings.TrimSpace(text))
+		if count == 0 {
 			return
 		}
-		out = append(out, indexedDocument{message: message, part: part, role: role, kind: kind, tool: tool, terms: strings.Join(terms, " "), count: len(terms)})
+		out = append(out, indexedDocument{message: message, part: part, role: role, kind: kind, tool: tool, terms: terms, count: count})
 	}
 	for i, msg := range messages {
 		if agent.IsPinnedContextRevision(msg) {

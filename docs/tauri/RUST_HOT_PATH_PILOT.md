@@ -512,3 +512,63 @@ python3 tools/tauri/bench-reply-metadata.py --output /tmp/reasonix-reply-metadat
 0.1.74 rollback and 0.1.75 packages are archived under
 `desktop/tauri/target/releases.noindex/`, outside bundler cleanup. The release
 receipt records signature, source and package checks; no native input is used.
+
+
+## Follow-up goal: context/index and WebView audit, 0.1.76
+
+This goal follows the scope audit: history display delivery was already
+optimized, while model context validation, search/index and actual renderer
+measurement still needed separate evidence. It does not mean all Go code is
+migrated or all performance opportunities are exhausted.
+
+Two confirmed Go allocation hotspots are changed:
+
+- Provider-visible fingerprinting streams the exact legacy JSON array into
+  SHA-256 one record at a time. Field order/tags, HTML escaping, raw replay
+  validation and truncated digest bytes remain compatible with stored context
+  checkpoints. A malformed replay record still invalidates the entire hash.
+  Read-only borrowed fields and one reusable tool-call scratch replace the
+  whole-transcript wire copy. Scratch is request-local, with no retained cache
+  or provider data transferred to Rust. Encoder storage can still scale with
+  the largest individual message; this is not a constant-memory context path.
+- History document construction emits the existing V1 joined token vocabulary
+  directly, avoiding a string per term and a temporary token slice. Word
+  lowercasing, underscores/digits, overlapping CJK bigrams, lone CJK terms,
+  ordering and counts match the existing independent `Tokens` oracle. Existing
+  truncation, pinned-record exclusion, classifications, FTS schema, ranking and
+  cursors are unchanged; no reindex or tokenizer-version migration is required.
+
+Five serial alternating rounds compare archived 0.1.75 against the candidate;
+setup is untimed and a complete warm-up round is discarded. Source/toolchain
+and binary hashes, all samples and medians are in
+[`benchmark.json`](evidence/2026-11-03-context-index/benchmark.json).
+
+| Synthetic workload | Old → new time | Go cumulative allocated bytes/op |
+| --- | ---: | ---: |
+| 200-message fingerprint | 0.393 → 0.312 ms | 0.537 → 0.0011 MB |
+| 10K-message fingerprint | 18.777 → 16.565 ms | 40.627 → 0.0011 MB |
+| 50K-message fingerprint | 97.866 → 81.900 ms | 198.037 → 0.0011 MB |
+| 10K complete covered-prefix normalize/hash | 24.019 → 19.487 ms | 69.407 → 14.748 MB |
+| 1K Latin tool documents, index text | 170.534 → 132.774 ms | 63.527 → 37.800 MB |
+| 1K mixed CJK tool documents, index text | 150.837 → 104.395 ms | 105.384 → 60.455 MB |
+
+These measurements exclude model generation, network, session snapshot, disk
+persist, IPC and rendering. Allocation figures are not peak RSS. Complete
+prefix validation remains O(history), including required model projection and
+pairing repair; it still allocates more than the isolated fingerprint.
+
+The unchanged 10K-source FTS query control measured 19.905 → 18.527 ms with the
+same 770 allocations/op. Query code is unchanged; this is not attributed as a
+search speedup. Tauri currently filters loaded session/project names, whereas
+historical full-text indexing is a separate path. Existing Tauri name-filter
+measurements are [recorded separately](evidence/2026-11-03-context-index/name-filter.json):
+200/1K/10K loaded sessions cost 0.028/0.133/1.456 ms per query in the synthetic
+Node probe. It excludes render time and does not justify another cache or a
+Rust IPC crossing at this stage.
+
+```sh
+python3 tools/tauri/bench-context-index.py --output /tmp/reasonix-context-index-bench
+```
+
+Renderer acceptance and final release checks are recorded below after the
+independent validation runs complete.
