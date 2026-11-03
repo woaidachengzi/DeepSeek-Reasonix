@@ -724,3 +724,105 @@ all earlier invocation paths remain unchanged. No new dependency, SDK pin,
 permission, native input or model call is introduced. 0.1.77 packaging uses the
 clean reviewed commit and archives outside DMG bundler cleanup, retaining
 0.1.76 as rollback.
+
+
+## Follow-up: stable live structural dependencies, 0.1.78
+
+The row-model contract already says it depends on the presence/completion of
+live text, while message descendants consume the actual stream through
+`LiveStreamContext`. The component's memo nevertheless depended on complete
+text/reasoning strings. Every text-only delta therefore created a new flags
+object and invalidated turn models, rows and their derived projections even
+when the history and row structure were unchanged.
+
+`useTranscriptLiveFlags` now computes answer/reasoning presence before memoizing
+on stream ID, those booleans and reasoning completion. The raw snapshot still
+reaches the context and subscribers. Initial text/reasoning appearance,
+completion, stream identity, settlement/discard, running state and immutable
+history changes retain their necessary rebuilds. This adds no cache of
+conversation bodies or mutable bridge records and changes no storage, native
+writer, observer or geometry ownership rule.
+
+The new regression checks 120 successive answer/reasoning updates: structural
+identity stays stable while every current raw value reaches a descendant.
+Whitespace-only answers, completion, new IDs, removal and presence changes
+remain observable. The actual Transcript test also checks current visible
+answer text and native active-block identity. Both tests are in the full
+Transcript script and ordinary test typechecking. Production hooks/types/
+CSS/single-writer/size gates and the complete existing Transcript suite passed.
+
+### Isolated structural compute
+
+Five serial alternating rounds compare the exact former dependency strategy
+with the production hook, using real turn/row builders under React/jsdom.
+Initial model construction and a warm-up pair are excluded. The timed phase
+contains 80 updates whose presence/completion/ID are already stable. Every
+case retains identical row counts; redundant structural rebuilds are 80 → 0.
+This is isolated model work, not DOM/layout/Markdown parsing or native latency.
+Raw samples, source/script hashes and Node version are in
+[model.json](evidence/2026-11-03-live-flags/model.json).
+
+### Full-page browser stream comparison
+
+The old production assets come from clean `6fbbeb2c8` (0.1.77). Three alternating
+rounds plus a discarded warm-up use fresh installed-Chrome contexts and the
+same fixed browser-mock stream. The windowed case loads 998 historical blocks;
+the heavy Markdown fixture's current page has 16 semantic blocks, including
+roughly 500KiB of Markdown/table source and a roughly 300KiB code example.
+Setup/parsing is awaited before the timed stream. All external HTTP origins
+are blocked and any attempted external request fails the run. No real model,
+provider key, native bridge, tool execution or filesystem write is involved.
+
+| CDP main-thread median during synthetic stream | 0.1.77 | Candidate |
+| --- | ---: | ---: |
+| Long history: script duration | 2966.440 ms | 944.107 ms |
+| Long history: total task duration | 3769.049 ms | 1627.308 ms |
+| Heavy Markdown/code: script duration | 2103.916 ms | 605.992 ms |
+| Heavy Markdown/code: total task duration | 2684.526 ms | 1250.961 ms |
+
+All measured samples visibly progressed, contained no empty viewport samples,
+and settled within 4px of the physical bottom. Warning/error console,
+framework overlay, page/runtime, expected reply and mount-mode gates passed.
+Windowed completed blocks stay ≤40, with at most one additional active block;
+the full-DOM Markdown page keeps its existing policy. Source and asset changes
+invalidate the comparison. The complete evidence is
+[browser.json](evidence/2026-11-03-live-flags/browser.json).
+
+These are main-thread cumulative durations, excluding worker CPU. rAF P95 is
+effectively unchanged around 16.8ms. The mock's emission timers share the UI
+thread, so old UI work can delay the fake producer itself; its wall-time
+change is not a model-generation or network speed result. Different counts
+of sampled text values reflect rAF coalescing and stream duration, not missing
+final text. The independent 120-update context test checks every value.
+The diagnostic viewport probe is included in both routes' CPU work.
+
+### Actual WKWebView correctness
+
+The same current production assets and stream probe passed fresh
+nonpersistent 1200×800 WKWebViews in both cases. Long history recorded 315
+frames/136 visible text changes, heavy Markdown 306 frames/126 changes; both
+had zero empty sampled viewports, clean console/runtime checks and final
+bottom distance 0. Source, asset and runtime identity are in
+[native-windowed.json](evidence/2026-11-03-live-flags/native-windowed.json) and
+[native-markdown.json](evidence/2026-11-03-live-flags/native-markdown.json).
+These are candidate functional runs, not paired native CPU/FPS comparisons.
+No physical keyboard/wheel input, OS capture, TCC change or real model call is
+accepted by these fixtures. Browser plugin was unavailable; browser validation
+uses the project's existing Playwright and local Chrome.
+
+```sh
+# desktop/frontend, existing locked dependencies only:
+node --import tsx bench/live-model.ts
+node bench/live-stream.mjs --baseline /tmp/reasonix-0177-dist \
+  --output /tmp/reasonix-live-stream-comparison --rounds 3
+# Repo root, production frontend already built, macOS:
+python3 tools/tauri/bench-transcript-native.py --output /tmp/reasonix-live-native \
+  --rounds 1 --probe-script tools/tauri/bench-transcript-stream.js --fixture windowed
+```
+
+The native runner's default question-navigation path remains unchanged;
+`--probe-script`/`--fixture` select these explicit test-only probes. This slice
+improves streaming computation and does not complete cold-history navigation,
+all renderer profiling, or the full Go-to-Rust migration. 0.1.78 packages use a
+clean reviewed commit and keep the archived 0.1.77 rollback outside bundler
+cleanup.

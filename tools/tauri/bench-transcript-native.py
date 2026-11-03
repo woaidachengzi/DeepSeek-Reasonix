@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serial native WKWebView question-navigation baseline, synthetic data only.
+"""Serial native WKWebView renderer probe, synthetic data only.
 
 Requires an existing production frontend build and macOS Swift/WebKit. Uses a
 private nonpersistent WebView; no system input, permissions, or model calls.
@@ -44,6 +44,8 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--rounds', default=3, type=int)
     parser.add_argument('--frontend-dist', type=Path, default=ROOT / 'desktop/frontend/dist')
+    parser.add_argument('--probe-script', type=Path, default=SOURCES[2])
+    parser.add_argument('--fixture', choices=('windowed', 'markdown'))
     args = parser.parse_args()
     if sys.platform != 'darwin' or args.rounds < 1:
         parser.error('macOS and positive rounds required')
@@ -52,7 +54,8 @@ def main():
     dist = args.frontend_dist.resolve()
     if not (dist / 'index.html').is_file():
         parser.error('build desktop/frontend first; dependencies are not installed by this runner')
-    hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in SOURCES}
+    probe_sources = [*SOURCES[:2], args.probe_script.resolve()]
+    hashes = {str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in probe_sources}
     assets = {str(p.relative_to(dist)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(dist.rglob('*')) if p.is_file()}
     app = output / 'Reasonix Transcript Measurement.app'
@@ -72,6 +75,8 @@ def main():
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     url = f'http://127.0.0.1:{server.server_port}/?mock=bench&bench=1'
+    if args.fixture:
+        url += '&streamFixture=' + args.fixture
     samples = []
     try:
         for index in range(args.rounds):
@@ -79,7 +84,7 @@ def main():
             log = output / f'round-{index}.log'
             try:
                 process = subprocess.Popen(['open', '-n', '-W', str(app), '--stdout', str(log), '--stderr', str(log),
-                    '--args', str(SOURCES[2]), str(result), url], env=env)
+                    '--args', str(probe_sources[2]), str(result), url], env=env)
                 try:
                     deadline = time.monotonic() + 10
                     while not Path(str(result) + '.pid').exists() and process.poll() is None and time.monotonic() < deadline:
@@ -112,11 +117,11 @@ def main():
     report = dict(samples=samples, source_sha256=hashes, asset_sha256=assets,
                   commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
                   status=subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True).strip(),
-                  scope='Native WKWebView shared production Transcript through browser mock adapter. Nine product question-navigation transactions per fresh nonpersistent WebView; DOM mouse events, not native input. rAF cadence includes probe/layout/scheduling, not paint/FPS. No Tauri shell IPC or model calls.',
+                  scope=('Native WKWebView. ' + samples[0].get('scope', '') if args.fixture else 'Native WKWebView shared production Transcript through browser mock adapter. Nine product question-navigation transactions per fresh nonpersistent WebView; DOM mouse events, not native input. rAF cadence includes probe/layout/scheduling, not paint/FPS. No Tauri shell IPC or model calls.'),
                   swift=subprocess.check_output(['swiftc', '--version'], env=env, text=True).strip())
     (output / 'measurement.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps([dict(frames=s['frameCount'], blank=s['blankFrames'], maxMounted=s['maxMounted'],
-        raf=s['rafIntervalMs'], navigationMs=[t['landingMs'] for t in s['transitions']]) for s in samples], indent=2))
+    print(json.dumps([dict(frames=s['frameCount'], blank=s.get('blankFrames', s.get('emptyFrames')), maxMounted=s['maxMounted'],
+        raf=s['rafIntervalMs'], navigationMs=[t['landingMs'] for t in s.get('transitions', [])], visibleTextChanges=s.get('visibleTextChanges')) for s in samples], indent=2))
 
 
 if __name__ == '__main__':

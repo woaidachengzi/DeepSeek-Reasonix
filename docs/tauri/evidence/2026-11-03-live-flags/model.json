@@ -1,0 +1,359 @@
+{
+  "scope": "React/jsdom isolated row-model recomputation across80 text/reasoning-only updates; setup and initial model excluded, warm-up discarded, five alternating rounds; not WebView, layout, Markdown parsing or model latency",
+  "baselineCommit": "6fbbeb2c87434d2e1b33cc29ca6e7959faf87e11",
+  "candidateCommit": "6fbbeb2c87434d2e1b33cc29ca6e7959faf87e11",
+  "candidateStatus": "M package.json\n M src/components/Transcript.tsx\n M ../../tools/tauri/bench-transcript-native.py\n?? bench/live-model.ts\n?? bench/live-stream.mjs\n?? src/__tests__/transcript-live-flags.test.ts\n?? src/lib/useTranscriptLiveFlags.ts\n?? ../../tools/tauri/bench-transcript-stream.js",
+  "node": "v26.13.0",
+  "sourceSha256": {
+    "../src/lib/useTranscriptLiveFlags.ts": "dfffd6cd918aaa9bf99307f22b8295a0f8efe12ea07bfdf290ce91d366f567c9",
+    "../src/lib/transcriptRows.ts": "58f6dcc85009fa6f266af045ec410e16a3f2c1e06db587a5a57156eef7a63f4c",
+    "../src/components/Transcript.tsx": "252b4811afa91beeec456708547450ca44688f7468200191b54e59c640ba43eb",
+    "./live-model.ts": "aa6c439c5e88ed2416835a1fb10e6059c2c80202e4d2a7281d4eaa2fdcbb9d03"
+  },
+  "samples": [
+    {
+      "round": 0,
+      "route": "baseline",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 40.30620799999997,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 0,
+      "route": "baseline",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 211.48929199999998,
+      "builds": 80,
+      "rows": 3001
+    },
+    {
+      "round": 0,
+      "route": "baseline",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 84.8287499999999,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 0,
+      "route": "candidate",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.220833000000084,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 0,
+      "route": "candidate",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.502082999999857,
+      "builds": 0,
+      "rows": 3001
+    },
+    {
+      "round": 0,
+      "route": "candidate",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 2.0615409999998064,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 1,
+      "route": "candidate",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.027166999999963,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 1,
+      "route": "candidate",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.4240409999999883,
+      "builds": 0,
+      "rows": 3001
+    },
+    {
+      "round": 1,
+      "route": "candidate",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 2.062541999999894,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 1,
+      "route": "baseline",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 40.22108299999991,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 1,
+      "route": "baseline",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 207.38204199999996,
+      "builds": 80,
+      "rows": 3001
+    },
+    {
+      "round": 1,
+      "route": "baseline",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 85.2689170000001,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 2,
+      "route": "baseline",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 39.63208400000008,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 2,
+      "route": "baseline",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 214.71395799999982,
+      "builds": 80,
+      "rows": 3001
+    },
+    {
+      "round": 2,
+      "route": "baseline",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 85.32370800000012,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 2,
+      "route": "candidate",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.877083999999968,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 2,
+      "route": "candidate",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.8415420000001177,
+      "builds": 0,
+      "rows": 3001
+    },
+    {
+      "round": 2,
+      "route": "candidate",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 2.0423749999999927,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 3,
+      "route": "candidate",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.0160419999999704,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 3,
+      "route": "candidate",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.6024999999999636,
+      "builds": 0,
+      "rows": 3001
+    },
+    {
+      "round": 3,
+      "route": "candidate",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 2.1461249999999836,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 3,
+      "route": "baseline",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 39.575207999999975,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 3,
+      "route": "baseline",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 209.04762500000015,
+      "builds": 80,
+      "rows": 3001
+    },
+    {
+      "round": 3,
+      "route": "baseline",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 82.44791600000008,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 4,
+      "route": "baseline",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 39.9604589999999,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 4,
+      "route": "baseline",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 209.7167919999997,
+      "builds": 80,
+      "rows": 3001
+    },
+    {
+      "round": 4,
+      "route": "baseline",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 84.66512499999999,
+      "builds": 80,
+      "rows": 601
+    },
+    {
+      "round": 4,
+      "route": "candidate",
+      "turns": 200,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.031499999999596,
+      "builds": 0,
+      "rows": 601
+    },
+    {
+      "round": 4,
+      "route": "candidate",
+      "turns": 1000,
+      "body": 64,
+      "updates": 80,
+      "ms": 2.9326670000000377,
+      "builds": 0,
+      "rows": 3001
+    },
+    {
+      "round": 4,
+      "route": "candidate",
+      "turns": 200,
+      "body": 524288,
+      "updates": 80,
+      "ms": 1.9786659999999756,
+      "builds": 0,
+      "rows": 601
+    }
+  ],
+  "medians": [
+    {
+      "turns": 200,
+      "body": 64,
+      "baseline": {
+        "ms": 39.9604589999999,
+        "builds": 80,
+        "rows": 601
+      },
+      "candidate": {
+        "ms": 2.031499999999596,
+        "builds": 0,
+        "rows": 601
+      }
+    },
+    {
+      "turns": 1000,
+      "body": 64,
+      "baseline": {
+        "ms": 209.7167919999997,
+        "builds": 80,
+        "rows": 3001
+      },
+      "candidate": {
+        "ms": 2.6024999999999636,
+        "builds": 0,
+        "rows": 3001
+      }
+    },
+    {
+      "turns": 200,
+      "body": 524288,
+      "baseline": {
+        "ms": 84.8287499999999,
+        "builds": 80,
+        "rows": 601
+      },
+      "candidate": {
+        "ms": 2.0615409999998064,
+        "builds": 0,
+        "rows": 601
+      }
+    }
+  ]
+}

@@ -24,11 +24,9 @@ import {
   foldMapWithReasoningOpen,
   foldMapWithToggle,
   foldSegmentStates,
-  NO_LIVE,
   reconcileFoldEntries,
   type FoldMap,
   type ToolItem,
-  type TranscriptLiveFlags,
 } from "../lib/transcriptRows";
 import { projectTranscriptTimeline, transcriptRenderMode } from "../lib/transcriptTimeline";
 import {
@@ -41,6 +39,7 @@ import { composeDomRef } from "../lib/composeDomRef";
 import { useTranscriptKernel } from "../lib/useTranscriptKernel";
 import { TranscriptHistoryRequest } from "../lib/transcriptHistoryRequest";
 import type { TranscriptQuestionNavigatorHandle } from "./TranscriptQuestionNavigator";
+import { useTranscriptLiveFlags } from "../lib/useTranscriptLiveFlags";
 import { useTranscriptQuestions } from "../lib/useTranscriptQuestionNavigation";
 import { useTranscriptSelectableRows } from "../lib/useTranscriptSelectableRows";
 import { useTranscriptSelectionRetention } from "../lib/useTranscriptSelectionRetention";
@@ -136,12 +135,7 @@ export function Transcript(props: TranscriptProps) {
   const viewportRef = useRef<TranscriptViewportHandle>(null);
   const committedSurfaceRef = useRef("");
   const experience = useSessionExperience();
-  const liveFlags = useMemo<TranscriptLiveFlags>(() => live?.id ? {
-    id: live.id,
-    hasAnswerText: Boolean(live.text.trim()),
-    hasReasoning: Boolean(live.reasoning),
-    reasoningComplete: live.reasoningComplete,
-  } : NO_LIVE, [live?.id, live?.reasoning, live?.reasoningComplete, live?.text]);
+  const liveFlags = useTranscriptLiveFlags(live);
   const turnModels = useMemo(() => buildTurnModels(items, liveFlags, running, false), [items, liveFlags, running]);
   // Capture stable commands, never the per-render hook result: a memoized
   // callback holding that result can chain older render/selection contexts.
