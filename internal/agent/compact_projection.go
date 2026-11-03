@@ -646,15 +646,12 @@ func checkpointProjectionMessages(msgs []provider.Message, head int, kept []prov
 	return provider.ProjectionMessages(projMsgs)
 }
 
-// acceptCheckpointCandidate requires real savings and, for automatic
-// maintenance, a result below the physical input ceiling.
-func (a *Agent) acceptCheckpointCandidate(trigger string, sourceTokens, candidateTokens int) error {
+// A checkpoint must shrink the view. It need not fit the provider yet: a
+// bounded recovery may need several such commits before sampling is safe.
+// ContextManager owns that final admission boundary, not this durable commit.
+func (a *Agent) acceptCheckpointCandidate(_ string, sourceTokens, candidateTokens int) error {
 	if candidateTokens >= sourceTokens {
 		return fmt.Errorf("%w: candidate would not reduce tokens (%d >= %d)", errCheckpointRejected, candidateTokens, sourceTokens)
-	}
-	hard := a.hardInputCeiling()
-	if trigger != CompactionTriggerManual && hard > 0 && candidateTokens >= hard {
-		return fmt.Errorf("%w: candidate %d still at or above physical ceiling %d", errCheckpointRejected, candidateTokens, hard)
 	}
 	return nil
 }

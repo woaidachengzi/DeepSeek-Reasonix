@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 
 	"reasonix/internal/provider"
@@ -66,20 +67,21 @@ func (a *Agent) streamProviderRequest(ctx context.Context, req provider.Request)
 
 // prepareSamplingRequest freezes one model-round request (preflight + interceptors).
 // Output budgets are resolved only here and never change the compact_ratio
-// trigger. Physical overflow may attempt at most one recovery summary.
+// trigger. Physical overflow gets one bounded recovery preflight; over-ceiling
+// input may need up to four summaries before a later preflight can resume.
 func (a *Agent) prepareSamplingRequest(ctx context.Context) (samplingRequest, error) {
 	frozen, err := a.buildSamplingRequest(ctx, CompactionTriggerPressure)
 	if err != nil {
 		return samplingRequest{}, err
 	}
 	if err := a.applyAdmissionToRequest(&frozen.req); err != nil {
-		// One-shot physical overflow recovery. Do not loop.
+		// One recovery preflight. Do not send the rejected request or loop here.
 		startProjectionVersion := a.currentProjectionVersion()
 		if _, perr := a.contextManager().Prepare(ctx, ContextPreparePolicy{
 			Trigger: CompactionTriggerOverflow,
 			Force:   true,
 		}); perr != nil {
-			return samplingRequest{}, err
+			return samplingRequest{}, errors.Join(err, perr)
 		}
 		if a.currentProjectionVersion() <= startProjectionVersion {
 			return samplingRequest{}, err

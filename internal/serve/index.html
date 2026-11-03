@@ -42,6 +42,9 @@ input,textarea{font:inherit;color:inherit}
 .app{display:grid;grid-template-columns:220px 1fr;grid-template-rows:1fr auto;height:100vh}
 .sidebar{grid-row:1/3;background:var(--bg-2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
 .transcript{overflow-y:auto;padding:24px 28px}
+.history-more{display:block;margin:0 auto 16px;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);color:var(--fg-2);font-size:12px}
+.history-more[hidden]{display:none}
+.history-more:disabled{opacity:.55;cursor:wait}
 .footer{border-top:1px solid var(--border);background:var(--bg);padding:12px 28px 16px;display:flex;flex-direction:column;gap:8px;position:relative}
 .footer::before{content:'';position:absolute;inset:-20px 0 auto 0;height:20px;background:linear-gradient(to top,var(--bg),transparent);pointer-events:none}
 
@@ -619,6 +622,8 @@ const __T = {
     'sessions': 'Sessions',
     'status': 'Status',
     'loading': 'Loading...',
+    'load_earlier': 'Load earlier messages',
+    'history_retry': 'History could not load. Click to retry.',
     'cache': 'Cache',
     'cost': 'Cost',
     'multi_currency': 'Multiple currencies',
@@ -774,6 +779,8 @@ const __T = {
     'sessions': '会话',
     'status': '状态',
     'loading': '加载中...',
+    'load_earlier': '加载更早记录',
+    'history_retry': '历史加载失败，点击重试。',
     'cache': '缓存',
     'cost': '费用',
     'multi_currency': '多币种',
@@ -993,7 +1000,7 @@ let currentMsg = null, currentText = null, currentReasoning = null;
 let turnStartAt = 0, turnTokens = 0, tickTimer = null, retryStatus = null;
 let toolCards = {};
 let escTimer = null;
-let hasVisibleHistory = false, checkpointCount = 0;
+let hasVisibleHistory = false, checkpointCount = 0, historyPrepending = false, historyScrollRevision = 0;
 let sessionsCache = [], sessionFilter = '', pendingDeleteSession = null;
 
 // ── slash commands registry ──
@@ -1023,7 +1030,12 @@ function slashGroupLabel(group){return __('cmd_group_'+group)||group;}
 
 // ── helpers ──
 function post(path, body) {
-  return fetch(path, {method:'POST',headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const changesHistory=['/new','/resume','/rewind'].includes(path)||(path==='/submit'&&/^\/(new|resume|switch|rewind|branch)\b/.test(body?.input||''));
+  if(changesHistory)resetHistoryPaging(path==='/resume'?body?.path:'');
+  const selection=historySelection;
+  return fetch(path, {method:'POST',headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined}).then(response=>{
+    if(changesHistory&&selection===historySelection){if(!response.ok)historySelector='';offerHistoryRetry();}return response;
+  },error=>{if(changesHistory&&selection===historySelection){historySelector='';offerHistoryRetry();}throw error;});
 }
 // Follow streaming output only while the user is pinned to the bottom of the
 // transcript; scrolling up detaches so history stays readable mid-stream.
@@ -1040,7 +1052,7 @@ let pinnedToBottom=true;
 function atBottom() { return log.scrollHeight-log.scrollTop-log.clientHeight<40; }
 log.addEventListener('scroll',()=>{pinnedToBottom=atBottom();});
 log.addEventListener('wheel',e=>{if(e.deltaY<0&&log.scrollHeight>log.clientHeight)pinnedToBottom=false;},{passive:true});
-function scrollDown(force) { if(force)pinnedToBottom=true; if(!pinnedToBottom)return; requestAnimationFrame(()=>{if(force)pinnedToBottom=true; else if(!pinnedToBottom)return; log.scrollTo({top:log.scrollHeight,behavior:'instant'});});}
+function scrollDown(force) { if(historyPrepending)return; const revision=historyScrollRevision; if(force)pinnedToBottom=true; if(!pinnedToBottom)return; requestAnimationFrame(()=>{if(revision!==historyScrollRevision)return;if(force)pinnedToBottom=true; else if(!pinnedToBottom)return; log.scrollTo({top:log.scrollHeight,behavior:'instant'});});}
 function hideWelcome() { if(welcome) welcome.style.display='none';}
 function showWelcome() { if(welcome) welcome.style.display='';}
 // Global single-key shortcuts must stay dead while the user is typing (the
@@ -1129,6 +1141,7 @@ function updateActionAvailability() {
 function setRunning(on) {
  if(on)log.querySelectorAll('[data-protocol-recovery] button').forEach(button=>button.disabled=true);
   running=on;
+  historyMore.disabled=on;
   retryStatus=null;
   btnSend.style.display=on?'none':'';
   btnStop.style.display=on?'':'none';
@@ -1622,7 +1635,7 @@ es.onmessage=ev=>{setConnState('connected');
   const e=JSON.parse(ev.data);
   if(e.kind!=='retrying')clearRetrying();
   switch(e.kind){
-    case 'turn_started': setRunning(true); clearPendingPrompts(); finalizeMsg(); toolCards={}; todosDismissed=false; break;
+    case 'turn_started': interruptHistoryForTurn(); setRunning(true); clearPendingPrompts(); finalizeMsg(); toolCards={}; todosDismissed=false; break;
     case 'reasoning': appendReasoning(e.reasoning||e.text||''); break;
     case 'text': currentReasoning=null; appendText(e.text||''); break;
     case 'message': finalizeMsg(); break;
@@ -1653,7 +1666,7 @@ es.onmessage=ev=>{setConnState('connected');
     case 'compaction_started': showCompaction({trigger:e.compaction?.trigger}); break;
     case 'compaction_done': showCompaction(e.compaction||{}); break;
     case 'retrying': setRetrying(e.retryAttempt,e.retryMax,e.recovery); break;
-    case 'turn_done': clearPendingPrompts(); finalizeMsg(); setRunning(false); if(e.outcome==='final_readiness'){showFinalReadinessPause(e.readiness);}else if(e.outcome==='recovery_paused'){showNotice('⏸ '+__('recovery_paused'));}else if(e.outcome==='completion_uncertain'){showNotice('⏸ '+__('completion_uncertain'));}else if(e.err){log.appendChild(el('div','msg--error','✗ '+e.err));scrollDown();} if(e.protocolRecovery&&e.status!=='interrupted')showProtocolRecovery(e.protocolRecovery); fetchStatus(); fetchTodos(); refreshCheckpointAvailability(); break;
+    case 'turn_done': clearPendingPrompts(); finalizeMsg(); setRunning(false); offerHistoryRetry(); if(e.outcome==='final_readiness'){showFinalReadinessPause(e.readiness);}else if(e.outcome==='recovery_paused'){showNotice('⏸ '+__('recovery_paused'));}else if(e.outcome==='completion_uncertain'){showNotice('⏸ '+__('completion_uncertain'));}else if(e.err){log.appendChild(el('div','msg--error','✗ '+e.err));scrollDown();} if(e.protocolRecovery&&e.status!=='interrupted')showProtocolRecovery(e.protocolRecovery); fetchStatus(); fetchTodos(); refreshCheckpointAvailability(); break;
   }
 };
 es.onerror=()=>{
@@ -1693,7 +1706,7 @@ function fetchStatus(){
 setInterval(fetchStatus,30000);
 
 // ── history ──
-function renderHistoryMessages(ms){
+function renderHistoryMessages(ms,options={}){
   if(!ms||ms.length===0){hasVisibleHistory=false;showWelcome();updateActionAvailability();return false;}
   const visible = ms.some(m => {
     if(m.role==='user')return !!m.content;
@@ -1735,9 +1748,58 @@ function renderHistoryMessages(ms){
       renderToolResult({id,name:m.toolName||'tool',output:m.content||''});showSearchHistoryNotice(m.toolName,m.content);
     }
   });
-  currentMsg=null;currentText=null;currentReasoning=null; scrollDown(true); updateActionAvailability(); return true;
+  currentMsg=null;currentText=null;currentReasoning=null; if(options.scroll!==false)scrollDown(true); updateActionAvailability(); return true;
 }
-fetch('/history').then(r=>r.json()).then(msgs=>{renderHistoryMessages(msgs);fetchTodos();}).catch(()=>{});
+let historyEpoch=0,historySelection=0,historyRequest=null,historyCursor='',historySessionKey='',historySelector='',historyNeedsReload=false;
+const historyMore=el('button','history-more',__('load_earlier'));
+historyMore.type='button';historyMore.hidden=true;historyMore.onclick=()=>void loadHistoryPage(!!historyCursor);
+log.prepend(historyMore);
+function cancelHistoryRequest(){historyEpoch++;historyRequest?.abort();historyRequest=null;historyMore.disabled=running;}
+function interruptHistoryForTurn(){if(historyRequest)historyNeedsReload=true;cancelHistoryRequest();}
+function offerHistoryRetry(){if(historyNeedsReload){historyMore.hidden=false;historyMore.textContent=historyCursor?__('load_earlier'):__('history_retry');historyMore.disabled=running;}}
+function resetHistoryPaging(selector=''){historySelection++;cancelHistoryRequest();historyCursor='';historySessionKey='';historySelector=selector;historyNeedsReload=true;historyMore.hidden=true;}
+function historyMutation(path,body,ready){const pending=post(path,body),selection=historySelection;pending.then(response=>{if(selection!==historySelection)return;if(!response.ok)throw new Error('history mutation failed');ready();}).catch(()=>{if(selection===historySelection)showNotice(__('error_loading'),'warn');});}
+function clearTranscriptForHistory(){log.replaceChildren(historyMore,welcome);showWelcome();}
+function scheduleHistoryReload(){const epoch=historyEpoch;setTimeout(()=>{if(epoch===historyEpoch)void loadHistoryPage();},300);}
+async function loadHistoryPage(earlier=false){
+  if(earlier&&(running||!historyCursor))return;
+  const epoch=historyEpoch,request=new AbortController();historyRequest?.abort();historyRequest=request;
+  historyMore.disabled=true;historyMore.textContent=__('loading');
+  const query=new URLSearchParams({limit:'200'});
+  if(historySelector)query.set('session',historySelector);
+  if(earlier)query.set('cursor',historyCursor);
+  try{
+    const response=await fetch('/history?'+query,{signal:request.signal});
+    if(epoch!==historyEpoch||historyRequest!==request)return;
+    if(!response.ok){if(response.status===409){historyCursor='';historySessionKey='';}throw new Error('history HTTP '+response.status);}
+    const page=await response.json();
+    if(epoch!==historyEpoch||historyRequest!==request)return;
+    if(running){historyNeedsReload=true;return;}
+    if(!Array.isArray(page.messages)||!page.sessionKey||earlier&&page.sessionKey!==historySessionKey)throw new Error('history session changed');
+    if(earlier){
+      const height=log.scrollHeight,top=log.scrollTop,pinned=pinnedToBottom;
+      const prior={toolCards,currentMsg,currentText,currentReasoning,hasVisibleHistory};
+      const existing=document.createDocumentFragment();
+      Array.from(log.childNodes).filter(node=>node!==historyMore).forEach(node=>existing.appendChild(node));
+      historyScrollRevision++;historyPrepending=true;try{if(page.messages.length)renderHistoryMessages(page.messages,{scroll:false});}finally{historyPrepending=false;}const olderCards=toolCards;
+      log.appendChild(existing);toolCards={...olderCards,...prior.toolCards};
+      currentMsg=prior.currentMsg;currentText=prior.currentText;currentReasoning=prior.currentReasoning;
+      hasVisibleHistory=prior.hasVisibleHistory||hasVisibleHistory;if(hasVisibleHistory)hideWelcome();
+      historyCursor=page.beforeCursor||'';historyMore.hidden=!page.hasMoreBefore;
+      historyMore.textContent=__('load_earlier');log.scrollTop=top+log.scrollHeight-height;pinnedToBottom=pinned;
+    }else{
+      clearTranscriptForHistory();renderHistoryMessages(page.messages);
+      historySessionKey=page.sessionKey;historyCursor=page.beforeCursor||'';historyMore.hidden=!page.hasMoreBefore;
+    }
+    historyNeedsReload=false;historyMore.textContent=__('load_earlier');fetchTodos();refreshCheckpointAvailability();
+  }catch(error){
+    if(epoch!==historyEpoch||historyRequest!==request||error.name==='AbortError')return;
+    historyMore.hidden=false;historyMore.textContent=__('history_retry');
+  }finally{
+    if(historyRequest===request){historyRequest=null;historyMore.disabled=running;}
+  }
+}
+void loadHistoryPage();
 
 // ── session list ──
 let sessionCount=0;
@@ -1763,7 +1825,7 @@ function renderSessions(){
     const title=sessionTitle(s);
     const meta=s.turns?s.turns+' turns':'';
     item.innerHTML='<svg class="session-item__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><div class="session-item__body"><div class="session-item__title">'+escHtml(title)+'</div><div class="session-item__meta">'+escHtml(meta)+'</div></div><button type="button" class="session-del" data-name="'+escAttr(s.name)+'" title="'+escAttr(__('delete_session'))+'">&times;</button>';
-    item.onclick=ev=>{if(ev.target.closest('.session-del')||running||s.current)return;post('/resume',{path:s.path}).then(()=>{log.innerHTML='';log.appendChild(welcome);showWelcome();hasVisibleHistory=false;checkpointCount=0;todosDismissed=false;resetCumulativeStats();loadSessions();updateActionAvailability();setTimeout(()=>fetch('/history').then(r=>r.json()).then(msgs=>{renderHistoryMessages(msgs);fetchTodos();refreshCheckpointAvailability();}),300);});};
+    item.onclick=ev=>{if(ev.target.closest('.session-del')||running||s.current)return;historyMutation('/resume',{path:s.path},()=>{clearTranscriptForHistory();hasVisibleHistory=false;checkpointCount=0;todosDismissed=false;resetCumulativeStats();loadSessions();updateActionAvailability();scheduleHistoryReload();});};
     list.appendChild(item);
   });
 }
@@ -2015,7 +2077,7 @@ $('#btn-plan').onclick=()=>void setPlan(!planMode);
 $('#btn-bypass').onclick=()=>void toggleYolo();
 $('#btn-goal').onclick=()=>toggleGoalMode();
 $('#goal-chip').onclick=()=>toggleGoalMode();
-$('#btn-new').onclick=()=>{if(running)return;post('/new').then(()=>{log.innerHTML='';log.appendChild(welcome);showWelcome();hasVisibleHistory=false;checkpointCount=0;todosState=[];todosDismissed=false;renderTodoPanel();resetCumulativeStats();loadSessions();updateActionAvailability();});};
+$('#btn-new').onclick=()=>{if(running)return;historyMutation('/new',null,()=>{clearTranscriptForHistory();hasVisibleHistory=false;checkpointCount=0;todosState=[];todosDismissed=false;renderTodoPanel();resetCumulativeStats();loadSessions();updateActionAvailability();void loadHistoryPage();});};
 $('#btn-compact').onclick=()=>{if(actionDisabled('btn-compact')){showNotice(__('no_conversation'),'warn');return;}post('/compact');};
 $('#btn-rewind').onclick=()=>{if(actionDisabled('btn-rewind')){showNotice(__('no_checkpoints'),'warn');return;}openRewindPicker();};
 $('#btn-tree').onclick=()=>openBranches();
@@ -2029,7 +2091,7 @@ $('#branches-list').onclick=e=>{
   const id=btn.dataset.branchId;
   if(!id)return;
   closeBranches();
-  post('/submit',{input:'/switch '+id}).then(()=>{setTimeout(()=>{log.innerHTML='';log.appendChild(welcome);showWelcome();loadSessions();fetch('/history').then(r=>r.json()).then(msgs=>{renderHistoryMessages(msgs);fetchTodos();refreshCheckpointAvailability();});},300);});
+  historyMutation('/submit',{input:'/switch '+id},()=>{clearTranscriptForHistory();loadSessions();scheduleHistoryReload();});
 };
 $('#models-modal-close').onclick=()=>closeModels();
 $('#models-modal').onclick=e=>{if(e.target===e.currentTarget)closeModels();};

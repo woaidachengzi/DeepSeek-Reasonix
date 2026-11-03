@@ -101,6 +101,14 @@ func (a *Agent) streamWithSamplingRecovery(parent context.Context, turn int) (te
 		if attempt < maxSamplingAttempts && a.trySamplingRepair(ctx, &state, result, sink, attempt, id) {
 			continue
 		}
+		// A failed repair can consume auxiliary summary usage without scheduling
+		// another attempt. Surface its stop here instead of the original overflow.
+		if stop := a.samplingRecoveryStop(ctx, limit, state.billable, attempt+1); stop != nil {
+			sink.Flush()
+			result.err, result.interrupted = stop, ctx.Err() != nil
+			result.usage = finalizeSamplingUsage(state.billable, result.usage)
+			return result
+		}
 		if a.waitSamplingRetry(ctx, &state, &result, sink, attempt, id) {
 			continue
 		}

@@ -7,7 +7,6 @@ package serve
 
 import (
 	"context"
-	"crypto/sha256"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -877,6 +876,15 @@ func (s *Server) approve(w http.ResponseWriter, r *http.Request) {
 // if the client sends If-None-Match with the current ETag, the server returns
 // 304 Not Modified with no body, saving bandwidth on reconnects.
 func (s *Server) history(w http.ResponseWriter, r *http.Request) {
+	page, paged, err := parseHistoryPageQuery(r.URL.Query())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if paged {
+		s.pagedHistory(w, r, page)
+		return
+	}
 	// A read-only surface can select a specific session a local runtime owns
 	// (spectator attach): serve the local writer's transcript from the file.
 	if raw := r.URL.Query().Get("session"); raw != "" {
@@ -910,27 +918,6 @@ func writeJSON(w http.ResponseWriter, v any) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		slog.Warn("serve: writeJSON encode failed", "err", err)
 	}
-}
-
-// writeJSONCached encodes v as JSON, computes a weak ETag from the body, and
-// returns 304 Not Modified if the client's If-None-Match matches. This avoids
-// re-sending unchanged history/context payloads on every reconnect.
-func writeJSONCached(w http.ResponseWriter, r *http.Request, v any) {
-	body, err := json.Marshal(v)
-	if err != nil {
-		slog.Warn("serve: writeJSONCached marshal failed", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	etag := fmt.Sprintf(`"%x"`, sha256.Sum256(body))
-	if match := r.Header.Get("If-None-Match"); match == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "private, max-age=0, must-revalidate")
-	_, _ = w.Write(body)
 }
 
 // corsMiddleware adds CORS headers for a specific allowed origin. Only use for

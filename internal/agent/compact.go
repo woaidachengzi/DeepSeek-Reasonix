@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"reasonix/internal/ablation"
@@ -421,10 +422,19 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 func (a *Agent) runSummaryRequest(ctx context.Context, req provider.Request) (summary string, usage *provider.Usage, err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if a.task.budget.started.IsZero() {
+		a.task.budget.started = time.Now()
+	}
+	// Fragment/tree-reduce fallback also reaches this shared send boundary.
+	// Check every auxiliary request, not only the outer checkpoint batch.
+	if err := a.compactionStop(ctx); err != nil {
+		return "", nil, err
+	}
 	ctx = provider.WithRequestAttemptCounter(ctx)
 	defer func() {
 		usage = provider.UsageWithRequestAttemptCount(ctx, usage)
 		if usage != nil && (usage.TotalTokens > 0 || usage.RequestCount > 0) {
+			a.task.budget.observe(usage, a.svc.pricing)
 			a.svc.sink.Emit(event.Event{Kind: event.Usage, ModelRef: a.modelRef, Usage: usage, Pricing: a.svc.pricing, UsageSource: event.UsageSourceCompaction})
 		}
 	}()
