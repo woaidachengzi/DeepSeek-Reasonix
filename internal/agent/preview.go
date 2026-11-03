@@ -89,6 +89,11 @@ func ContainsMemoryCompilerExecution(content string) bool {
 // sessions whose first turn was compiled would show a blank history/sidebar
 // preview (#5307).
 func StripTransientUserBlocks(content string) string {
+	// Every supported runtime wrapper contains an XML opening delimiter.
+	// Plain user text needs only the same leading ASCII whitespace trim.
+	if !strings.Contains(content, "<") {
+		return strings.TrimLeft(content, " \t\r\n")
+	}
 	s := unwrapMemoryCompilerExecution(content)
 	for {
 		next := reTransientUserBlock.ReplaceAllStringFunc(s, func(string) string {

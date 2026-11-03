@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"hash"
 
 	"reasonix/internal/provider"
@@ -15,30 +16,45 @@ import (
 // per message. It is owned by one reader and must not be copied after use.
 // A serialization error invalidates the entire prefix until the owner resets it.
 type ConversationPrefixAccumulator struct {
-	hash hash.Hash
-	err  error
+	hash    hash.Hash
+	encoder *json.Encoder
+	err     error
 }
+
+var errConversationPrefixEncoding = errors.New("conversation prefix serialization failed")
 
 // Append reports whether this message participates in conversation identity.
 // The caller may request Token only for the display rows that need one.
-func (p *ConversationPrefixAccumulator) Append(message provider.Message) (bool, error) {
+// It borrows message only until return; callers must not mutate it concurrently.
+func (p *ConversationPrefixAccumulator) Append(message *provider.Message) (bool, error) {
 	if p.err != nil {
 		return false, p.err
 	}
-	if message.Role == provider.RoleSystem || IsPinnedContextRevision(message) ||
+	if message == nil {
+		p.err = errConversationPrefixEncoding
+		p.encoder = nil
+		p.hash = nil
+		return false, p.err
+	}
+	if message.Role == provider.RoleSystem || IsPinnedContextRevision(*message) ||
 		message.Role == provider.RoleUser && sessioncontext.IsContent(message.Content) {
 		return false, nil
 	}
-	encoded, err := json.Marshal(message)
-	if err != nil {
-		p.err = err
-		return false, err
-	}
 	if p.hash == nil {
 		p.hash = sha256.New()
+		p.encoder = json.NewEncoder(p.hash)
 	}
-	p.hash.Write(encoded)
-	p.hash.Write([]byte{'\n'})
+	// Default Encode preserves Marshal's escaping and appends the same newline.
+	// Borrowing an addressable message avoids boxing a full Message value, and
+	// writing to the hash avoids Marshal's returned byte-slice copy.
+	if err := p.encoder.Encode(message); err != nil {
+		// An encoder error may retain a reflect.Value into the caller's data.
+		// Keep only a static failure marker in this long-lived accumulator.
+		p.err = errConversationPrefixEncoding
+		p.encoder = nil
+		p.hash = nil
+		return false, err
+	}
 	return true, nil
 }
 

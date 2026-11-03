@@ -47,37 +47,74 @@ type bridgeHistoryCache struct {
 func (c *bridgeHistoryCache) page(controller *control.Controller, limit int) ([]desktopbridge.HistoryMessage, int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	messages, cursor, reset := controller.HistoryDelta(c.cursor)
-	c.update(messages, reset)
-	c.cursor = cursor
-	return c.snapshot(limit)
+	return c.readPage(controller.HistoryReader(), limit)
 }
 
 // update and snapshot run under mu in production. Splitting the incremental
 // projector from its source also permits exact full-projector parity tests.
 func (c *bridgeHistoryCache) update(messages []provider.Message, reset bool) {
+	c.updateRetained(messages, reset, bridgeHistoryRetainFrom(messages))
+}
+
+// Only the newest display window needs text copies and per-row usage/token
+// snapshots. Counting backwards normally examines just the last few hundred
+// raw records; the forward pass still hashes and accounts for the full batch.
+func bridgeHistoryRetainFrom(messages []provider.Message) int {
+	visible := 0
+	for index := len(messages) - 1; index >= 0; index-- {
+		if bridgeHistoryRowVisible(messages[index]) {
+			visible++
+			if visible == bridgeHistoryCacheCapacity {
+				return index
+			}
+		}
+	}
+	return 0
+}
+
+// Synthetic failures are display rows even when their current localized text
+// is empty. All ordinary rows follow the full projector's visibility and text
+// rules, including RawContent and legacy user-wrapper stripping.
+func bridgeHistoryRowVisible(message provider.Message) bool {
+	if _, failure := bridgeNoDeliverableHistory(message); failure {
+		return true
+	}
+	return bridgeHistoryMessageVisible(message) && strings.TrimSpace(bridgeHistoryMessageContent(message)) != ""
+}
+
+// retainFrom is a raw index relative to messages. It may exceed this slice's
+// length when a larger atomic batch is processed in chunks: that chunk updates
+// identity, total and usage only. The complete batch must be applied before a
+// snapshot is exposed, so its retained tail can replace any older cache rows.
+func (c *bridgeHistoryCache) updateRetained(messages []provider.Message, reset bool, retainFrom int) {
 	if reset {
 		c.prefix = agent.ConversationPrefixAccumulator{}
-		c.usage = nil
 		clear(c.rows[:])
 		c.head, c.count, c.total = 0, 0, 0
 		c.invalidTokens = false
 	}
 	if c.usage == nil {
 		c.usage = newHistoryUsage()
+	} else if reset {
+		resetBridgeHistoryUsage(c.usage)
 	}
-	for _, message := range messages {
+	for index := range messages {
+		message := &messages[index]
 		included, err := c.prefix.Append(message)
 		c.invalidTokens = c.invalidTokens || err != nil
-		if failure, ok := bridgeNoDeliverableHistory(message); ok {
+		if failure, ok := bridgeNoDeliverableHistory(*message); ok {
+			if index < retainFrom {
+				c.total++
+				continue
+			}
 			// Localization is resolved at read time, including unchanged reads.
 			failure.Content = ""
 			c.append(cachedBridgeHistoryMessage{value: failure, localFailure: true})
 			continue
 		}
-		visible := bridgeHistoryMessageVisible(message)
+		visible := bridgeHistoryMessageVisible(*message)
 		if message.Role == provider.RoleUser && visible {
-			c.usage = newHistoryUsage()
+			resetBridgeHistoryUsage(c.usage)
 		}
 		if message.Role == provider.RoleAssistant {
 			c.usage.add(message.RequestUsage)
@@ -85,8 +122,12 @@ func (c *bridgeHistoryCache) update(messages []provider.Message, reset bool) {
 		if !visible {
 			continue
 		}
-		content := bridgeHistoryMessageContent(message)
+		content := bridgeHistoryMessageContent(*message)
 		if strings.TrimSpace(content) == "" {
+			continue
+		}
+		if index < retainFrom {
+			c.total++
 			continue
 		}
 		content, truncated := truncateBridgeHistoryContent(content)
@@ -104,6 +145,10 @@ func (c *bridgeHistoryCache) update(messages []provider.Message, reset bool) {
 			TurnUsage: c.usage.snapshot(role == "assistant"), ForkToken: forkToken,
 		}})
 	}
+}
+
+func resetBridgeHistoryUsage(usage *historyUsage) {
+	*usage = historyUsage{value: desktopbridge.HistoryTurnUsage{Complete: true}, cacheKnown: true}
 }
 
 func (c *bridgeHistoryCache) append(row cachedBridgeHistoryMessage) {

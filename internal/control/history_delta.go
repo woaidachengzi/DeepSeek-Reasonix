@@ -15,3 +15,14 @@ func (c *Controller) HistoryDelta(previous agent.SessionHistoryCursor) ([]provid
 	}
 	return session.HistoryDelta(previous)
 }
+
+// HistoryReader captures the executor Session once for a chunked history
+// request. Keep the returned reader local to that request; resident projection
+// caches retain only its opaque cursor, which cannot retain private messages.
+func (c *Controller) HistoryReader() agent.SessionHistoryReader {
+	var session *agent.Session
+	if c != nil && c.executor != nil {
+		session = c.executor.Session()
+	}
+	return session.HistoryReader()
+}

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,13 +50,55 @@ default="alpha"
 		}
 	})
 	manager := desktopbridge.NewRuntimeManager(factory)
-	t.Cleanup(func() { _ = manager.Shutdown() })
+	var promptWaiters sync.WaitGroup
+	defer func() {
+		// A failed assertion can leave the direct Ask/Interact goroutine and
+		// provider turn alive. Join them before TempDir removes their store.
+		if factory.latest != nil {
+			factory.latest.controller.Cancel()
+		}
+		joined := make(chan struct{})
+		go func() { promptWaiters.Wait(); close(joined) }()
+		select {
+		case <-joined:
+		case <-time.After(5 * time.Second):
+			t.Error("prompt ticket waiters did not stop")
+		}
+		deadline := time.Now().Add(5 * time.Second)
+		for factory.latest != nil && factory.latest.controller.Running() && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		if factory.latest != nil && factory.latest.controller.Running() {
+			t.Error("prompt ticket turn did not stop before store cleanup")
+		}
+		_ = manager.Shutdown()
+	}()
 	if _, err := manager.Open(context.Background(), desktopbridge.OpenRequest{SessionID: "prompt-ticket", WorkspaceRoot: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	initial, ok := manager.CommandSnapshot()
 	if !ok {
 		t.Fatal("missing actual controller")
+	}
+	awaitPrompt := func(kind string) desktopbridge.OwnedCommandView {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			view, ok := manager.CommandSnapshot()
+			if ok && view.Scope == initial.Scope && len(view.State.Pending) == 1 && view.State.Pending[0].Kind == kind {
+				// Event receipt and registered identity can precede clearing the
+				// queued flag. Wait for the exact public, actionable reader.
+				payload, err := manager.ReadOwnedPrompt(t.Context(), view.Scope, view.State.Pending[0])
+				var wire eventwire.Event
+				if err == nil && json.Unmarshal(payload, &wire) == nil &&
+					(kind == "ask" && wire.Ask != nil || kind == "mcp" && wire.MCPInteraction != nil) {
+					return view
+				}
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Fatalf("actual %s prompt did not become readable for its captured owner", kind)
+		return desktopbridge.OwnedCommandView{}
 	}
 	catalogue := newPreviewDesktopCatalogue(manager, nil)
 	defer catalogue.Close()
@@ -69,15 +112,14 @@ default="alpha"
 	}
 	call := awaitOwnedCommand(t, provider.calls)
 	answers := make(chan []event.AskAnswer, 1)
+	promptWaiters.Add(1)
 	go func() {
+		defer promptWaiters.Done()
 		value, _ := factory.latest.controller.Ask(call.ctx, []event.AskQuestion{{ID: "q", Prompt: "private question", Options: []event.AskOption{{Label: "A"}, {Label: "B"}}}})
 		answers <- value
 	}()
 	awaitOwnedCommand(t, requests)
-	view, ok := manager.CommandSnapshot()
-	if !ok || len(view.State.Pending) != 1 {
-		t.Fatal("missing actual pending prompt")
-	}
+	view := awaitPrompt("ask")
 	prompt := view.State.Pending[0]
 	pendingRead, err := catalogue.ReadPending(context.Background(), entry)
 	if err != nil || len(pendingRead.Prompts) != 1 || pendingRead.Prompts[0].Ask == nil || pendingRead.Prompts[0].Scope.PromptID != prompt.ID {
@@ -177,15 +219,14 @@ default="alpha"
 	// The next prompt in the same live turn is a distinct specialized surface;
 	// an Ask ticket cannot drift to it, and generic approve cannot accept MCP.
 	mcpResult := make(chan mcpinteraction.Result, 1)
+	promptWaiters.Add(1)
 	go func() {
+		defer promptWaiters.Done()
 		result, _ := factory.latest.controller.Interact(call.ctx, mcpinteraction.Request{Server: "private-fixture", Mode: "form", Message: "Confirm?", RequestedSchema: json.RawMessage(`{"type":"object","properties":{"approved":{"type":"boolean"},"label":{"type":"string"}},"required":["approved"]}`)})
 		mcpResult <- result
 	}()
 	awaitOwnedCommand(t, requests)
-	mcpView, ok := manager.CommandSnapshot()
-	if !ok || len(mcpView.State.Pending) != 1 || mcpView.State.Pending[0].Kind != "mcp" {
-		t.Fatal("actual MCP identity missing")
-	}
+	mcpView := awaitPrompt("mcp")
 	pendingRead, err = catalogue.ReadPending(context.Background(), entry)
 	if err != nil || len(pendingRead.Prompts) != 1 || pendingRead.Prompts[0].MCPInteraction == nil || pendingRead.Prompts[0].Ask != nil || pendingRead.Prompts[0].Scope.PromptID != mcpView.State.Pending[0].ID || len(requests) != 0 || len(decisions) != 0 {
 		t.Fatal("unified reader replayed or adopted previous Ask", err)

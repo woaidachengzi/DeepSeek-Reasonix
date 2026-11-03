@@ -39,7 +39,7 @@ func TestConversationPrefixAccumulatorZeroAndBatchedParity(t *testing.T) {
 			last := ""
 			for start := 0; start < len(messages); start += chunk {
 				for index := start; index < min(start+chunk, len(messages)); index++ {
-					included, err := prefix.Append(messages[index])
+					included, err := prefix.Append(&messages[index])
 					if err != nil {
 						t.Fatalf("append %d: %v", index, err)
 					}
@@ -108,6 +108,37 @@ func TestConversationPrefixAccumulatorHashesEveryMessageField(t *testing.T) {
 	}
 }
 
+func TestConversationPrefixAccumulatorBorrowsOnlyDuringEncode(t *testing.T) {
+	messages := []provider.Message{
+		{Role: provider.RoleUser, Content: "<>&\u2028\u2029\n\t\"quoted\""},
+		{Role: provider.RoleAssistant, Content: "answer", ReadResult: json.RawMessage(` { "z": "<&", "a": [1, 2] } `)},
+	}
+	want, err := ConversationPrefixTokens(messages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prefix ConversationPrefixAccumulator
+	var scratch provider.Message
+	for i := range messages {
+		scratch = messages[i]
+		if _, err := prefix.Append(&scratch); err != nil {
+			t.Fatal(err)
+		}
+		scratch = provider.Message{Role: provider.RoleUser, Content: "caller reused buffer"}
+		if prefix.Token() != want[i] {
+			t.Fatal("encoding differs from Marshal/newline or retained caller input")
+		}
+	}
+	scratch.ReadResult = json.RawMessage(`{`)
+	if _, err := prefix.Append(&scratch); err == nil || prefix.err != errConversationPrefixEncoding || prefix.encoder != nil || prefix.hash != nil {
+		t.Fatal("invalid input must discard encoder state and retain only a static failure")
+	}
+	var empty ConversationPrefixAccumulator
+	if included, err := empty.Append(nil); included || err == nil || empty.Token() != "" {
+		t.Fatal("nil input must fail closed")
+	}
+}
+
 func accumulatorTokenForTest(t *testing.T, messages []provider.Message) string {
 	t.Helper()
 	want, err := ConversationPrefixTokens(messages)
@@ -117,7 +148,7 @@ func accumulatorTokenForTest(t *testing.T, messages []provider.Message) string {
 	var prefix ConversationPrefixAccumulator
 	last := ""
 	for index, message := range messages {
-		included, err := prefix.Append(message)
+		included, err := prefix.Append(&message)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -154,20 +185,20 @@ func TestConversationPrefixAccumulatorSerializationErrorStickyAndReset(t *testin
 				t.Fatal("malformed fixture did not fail original hashing")
 			}
 			var prefix ConversationPrefixAccumulator
-			if _, err := prefix.Append(first); err != nil {
+			if _, err := prefix.Append(&first); err != nil {
 				t.Fatal(err)
 			}
-			if included, err := prefix.Append(bad); included || err == nil || prefix.Token() != "" {
+			if included, err := prefix.Append(&bad); included || err == nil || prefix.Token() != "" {
 				t.Fatalf("serialization failure did not invalidate prefix: included=%v, error=%v, token=%q", included, err, prefix.Token())
 			}
 			for _, following := range []provider.Message{last, {Role: provider.RoleSystem, Content: "excluded"}} {
-				if included, err := prefix.Append(following); included || err == nil || prefix.Token() != "" {
+				if included, err := prefix.Append(&following); included || err == nil || prefix.Token() != "" {
 					t.Fatal("a later append recovered an invalid prefix without reset")
 				}
 			}
 			prefix = ConversationPrefixAccumulator{}
 			for _, message := range []provider.Message{first, last} {
-				if _, err := prefix.Append(message); err != nil {
+				if _, err := prefix.Append(&message); err != nil {
 					t.Fatal(err)
 				}
 			}

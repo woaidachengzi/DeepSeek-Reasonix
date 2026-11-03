@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Serial offline HTTP history comparison against the exact 0.1.70 source."""
+"""Serial offline HTTP history comparison against a fixed source commit."""
 import argparse
 import hashlib
 import io
@@ -18,9 +18,11 @@ HARNESS = "cmd/reasonix-desktop-bridge/history_page_benchmark_test.go"
 SOURCES = [
     "cmd/reasonix-desktop-bridge/core_runtime.go",
     "cmd/reasonix-desktop-bridge/history_page.go",
+    "cmd/reasonix-desktop-bridge/history_reader.go",
     "internal/agent/conversation_prefix.go",
     "internal/agent/conversation_prefix_accumulator.go",
     "internal/agent/session.go",
+    "internal/agent/preview.go",
     "internal/agent/session_history_delta.go",
     "internal/agent/save_dag.go",
     "internal/agent/save_dag_plan.go",
@@ -64,6 +66,7 @@ def rows(log):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--baseline", default=BASE)
     parser.add_argument("--rounds", type=int, default=5)
     parser.add_argument("--iterations", type=int, default=20)
     args = parser.parse_args()
@@ -71,7 +74,7 @@ def main():
         parser.error("rounds and iterations must be positive")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    baseline = git("rev-parse", "--verify", BASE + "^{commit}")
+    baseline = git("rev-parse", "--verify", args.baseline + "^{commit}")
     candidate_commit = git("rev-parse", "HEAD")
     candidate_status = git("status", "--short")
     source_hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in SOURCES}
@@ -83,8 +86,12 @@ def main():
     with tarfile.open(fileobj=io.BytesIO(archive)) as files:
         files.extractall(source, filter="data")
     (source / HARNESS).write_bytes((ROOT / HARNESS).read_bytes())
-    shim = source / "cmd/reasonix-desktop-bridge/history_page_baseline_test.go"
-    shim.write_text('''package main
+    # Newer baselines already contain the bounded runtime constructor and must
+    # retain it: replacing it with the legacy adapter would exaggerate gains.
+    bounded_baseline = (source / "cmd/reasonix-desktop-bridge/history_page_integration_test.go").is_file()
+    if not bounded_baseline:
+        shim = source / "cmd/reasonix-desktop-bridge/history_page_baseline_test.go"
+        shim.write_text('''package main
 import "reasonix/internal/desktopbridge"
 func newHistoryBenchmarkRuntime(core *controllerRuntime) desktopbridge.Runtime {
     return &historyHTTPFullRuntime{bridgeTestRuntime: &bridgeTestRuntime{path: "/synthetic/history-bench", state: "idle"}, core: core}
@@ -121,7 +128,9 @@ func newHistoryBenchmarkRuntime(core *controllerRuntime) desktopbridge.Runtime {
     for name, expected in source_hashes.items():
         if hashlib.sha256((ROOT / name).read_bytes()).hexdigest() != expected:
             raise RuntimeError(f"Source changed after build started: {name}; discard measurements")
-    report = dict(baseline_commit=baseline, candidate_commit=candidate_commit,
+    report = dict(baseline_commit=baseline,
+                  baseline_runtime="archived bounded constructor" if bounded_baseline else "injected legacy constructor",
+                  candidate_commit=candidate_commit,
                   candidate_status=candidate_status,
                   platform=platform.platform(), machine=platform.machine(),
                   go=subprocess.check_output(["go", "version"], text=True).strip(),
