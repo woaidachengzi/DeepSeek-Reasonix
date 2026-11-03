@@ -1,0 +1,2234 @@
+{
+  "baseline_commit": "bab3297ba129a0a8db5393e765a5638501713adb",
+  "candidate_commit": "813a90725045faeac68277e93336ebac3902cfa1",
+  "candidate_status": "",
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "rounds": 5,
+  "go": "go version go1.27.3 darwin/arm64",
+  "rust": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "source_sha256": {
+    "internal/desktopbridge/events.go": "bdee8b5738037fafd03a511833651d1715e948820563ab49649b783762b645a5",
+    "internal/desktopbridge/live_state.go": "52c3d62c52e7afd7e5feb3f5560c755a6d8c9d5e41838f41e9c2677f8c3e0c36",
+    "internal/desktopbridge/live_update.go": "d2ccfaff8582295aa90def8e711859b523905681b274e1e0a53162e718347bc2",
+    "internal/desktopbridge/ledger.go": "c2e4cdf20b01e74178de04ef0c2180cdb817a9f9684526d6dd16b65d4309ee3e",
+    "internal/desktopbridge/live_typed_benchmark_test.go": "0ae8a0d1b5e8bd131c2e4fde93c46449fee8d40223d844121b8be528f1c27c53",
+    "desktop/tauri/src/bridge/event_stream.rs": "afe7cae7faccaaafca22f71532a7613fb7852a13d7cd5135c4cf10b4ae372fe2",
+    "desktop/tauri/src/bridge/event_stream_bench.rs": "a86770baceecfa6db514b4b080ccdabe4d726bc5914ebfe588b5da357f309e3b",
+    "desktop/tauri/src/bridge/http_response.rs": "02248586df08eb40029391db9f12c152791f6a9ba548a93aaaa47a2f4b8036e9",
+    "desktop/tauri/src/protocol_generated.rs": "ddde355d4a9599f2f9b85938b2d09b172147fefb7a157908e8d38f345027a069",
+    "desktop/tauri/Cargo.lock": "e112a7b3ab7e7cea49c6ef0d07fbff429f120a134e0d495ff66a99e970087107",
+    "desktop/cua-runtime/src/main.rs": "5a65bde5d4b8ab8a48d2528b87fb7641d6fbac5fc598dbd06988125dda2f26ec",
+    "desktop/cua-runtime/src/reply.rs": "f697592953252205acbaf9eef84954d0bdfbe2fd50d151dd775ba7cfc8312a9c",
+    "desktop/cua-runtime/src/preview.rs": "4c053a3ba1ab3e0c8a7f36e06775deed2899a8db731ad31207b447a25f71832f",
+    "desktop/cua-runtime/examples/reply_pipeline.rs": "7dfdba2a1da70f828a7e56220d5efc519b20255c7c76e62976982af8489d386c",
+    "desktop/cua-runtime/Cargo.lock": "94d6c2cbb4ca326a1697601b06c53c8b6d62efe80bc6bee36e6f2e9972545102",
+    "internal/computeruse/cua_reply_bench_test.go": "2a4b2c401193cb19bb4fd18c0120b00814eeedb6132c636ba9a12f6ba0de67a0",
+    "tools/tauri/bench-event-pipelines.py": "753a37a689d16a920521c4475e80253e9829aa74cb09dbc0c91563c34808b228"
+  },
+  "binary_sha256": {
+    "baseline": "7d95a6bb4981a076efe3ca1372feaf0eecb053a26e122be56097f0333ed8f7ea",
+    "candidate": "95f7e9488c7cff3fdbd63cfc0f95d9d2f31d74befc5b309c23d5c641992569ce",
+    "sse": "07119b145648d06cf5eebe6173985778d084f82749e0a585816db98ede65a9b4",
+    "cua_reply": "475ee68663305dd82cf20f1da7ba739d37c16bd912e58df7dfcbb0e39f682635",
+    "go_pipe": "906838d0ab3b57580afec20989036b813fb0ac2c97a95db4dc726cc4d01cd176"
+  },
+  "events": {
+    "baseline": [
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 125136,
+          "ns_per_op": 948.9,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 121446,
+          "ns_per_op": 957.7,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 131289,
+          "ns_per_op": 919.0,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 119850,
+          "ns_per_op": 978.1,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 16404,
+          "ns_per_op": 7349.0,
+          "go_bytes_per_op": 11179,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 16527,
+          "ns_per_op": 7358.0,
+          "go_bytes_per_op": 11173,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 16260,
+          "ns_per_op": 7369.0,
+          "go_bytes_per_op": 11176,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 16172,
+          "ns_per_op": 7329.0,
+          "go_bytes_per_op": 11177,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 98,
+          "ns_per_op": 1283806.0,
+          "go_bytes_per_op": 2179952,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 94,
+          "ns_per_op": 1299092.0,
+          "go_bytes_per_op": 2160248,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 96,
+          "ns_per_op": 1269452.0,
+          "go_bytes_per_op": 2137278,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 94,
+          "ns_per_op": 1331477.0,
+          "go_bytes_per_op": 2126412,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 129712,
+          "ns_per_op": 902.3,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 121912,
+          "ns_per_op": 960.9,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 128056,
+          "ns_per_op": 925.9,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 116472,
+          "ns_per_op": 1017.0,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 15200,
+          "ns_per_op": 8517.0,
+          "go_bytes_per_op": 11179,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 13950,
+          "ns_per_op": 8729.0,
+          "go_bytes_per_op": 11183,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 14636,
+          "ns_per_op": 7843.0,
+          "go_bytes_per_op": 11178,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 16162,
+          "ns_per_op": 7494.0,
+          "go_bytes_per_op": 11184,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 93,
+          "ns_per_op": 1305167.0,
+          "go_bytes_per_op": 2137997,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 94,
+          "ns_per_op": 1286074.0,
+          "go_bytes_per_op": 2126504,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 94,
+          "ns_per_op": 1270265.0,
+          "go_bytes_per_op": 2115175,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 94,
+          "ns_per_op": 1262951.0,
+          "go_bytes_per_op": 2137640,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 122086,
+          "ns_per_op": 937.6,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 123459,
+          "ns_per_op": 980.9,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 128295,
+          "ns_per_op": 949.0,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 120110,
+          "ns_per_op": 1000.0,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 15690,
+          "ns_per_op": 7660.0,
+          "go_bytes_per_op": 11178,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 15615,
+          "ns_per_op": 7766.0,
+          "go_bytes_per_op": 11178,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 15661,
+          "ns_per_op": 8117.0,
+          "go_bytes_per_op": 11177,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 15319,
+          "ns_per_op": 7732.0,
+          "go_bytes_per_op": 11181,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 86,
+          "ns_per_op": 1292485.0,
+          "go_bytes_per_op": 2139842,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 96,
+          "ns_per_op": 1305273.0,
+          "go_bytes_per_op": 2137281,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 94,
+          "ns_per_op": 1291216.0,
+          "go_bytes_per_op": 2137700,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 90,
+          "ns_per_op": 1288617.0,
+          "go_bytes_per_op": 2126904,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 128683,
+          "ns_per_op": 890.8,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 127552,
+          "ns_per_op": 953.8,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 131158,
+          "ns_per_op": 907.0,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 125180,
+          "ns_per_op": 995.5,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 15894,
+          "ns_per_op": 7639.0,
+          "go_bytes_per_op": 11179,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 15624,
+          "ns_per_op": 7638.0,
+          "go_bytes_per_op": 11172,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 15747,
+          "ns_per_op": 7392.0,
+          "go_bytes_per_op": 11175,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 16460,
+          "ns_per_op": 7192.0,
+          "go_bytes_per_op": 11176,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 94,
+          "ns_per_op": 1324819.0,
+          "go_bytes_per_op": 2137642,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 82,
+          "ns_per_op": 1306100.0,
+          "go_bytes_per_op": 2166668,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 87,
+          "ns_per_op": 1273138.0,
+          "go_bytes_per_op": 2163893,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 94,
+          "ns_per_op": 1263866.0,
+          "go_bytes_per_op": 2160250,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 126660,
+          "ns_per_op": 889.5,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 125840,
+          "ns_per_op": 967.9,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 125454,
+          "ns_per_op": 925.3,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 121923,
+          "ns_per_op": 975.0,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 16446,
+          "ns_per_op": 8769.0,
+          "go_bytes_per_op": 11177,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 15519,
+          "ns_per_op": 7755.0,
+          "go_bytes_per_op": 11179,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 15666,
+          "ns_per_op": 7622.0,
+          "go_bytes_per_op": 11180,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 15729,
+          "ns_per_op": 7213.0,
+          "go_bytes_per_op": 11174,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 93,
+          "ns_per_op": 1264876.0,
+          "go_bytes_per_op": 2137996,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 96,
+          "ns_per_op": 1264722.0,
+          "go_bytes_per_op": 2159227,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 94,
+          "ns_per_op": 1274219.0,
+          "go_bytes_per_op": 2137640,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 93,
+          "ns_per_op": 1280135.0,
+          "go_bytes_per_op": 2149231,
+          "go_allocs_per_op": 7
+        }
+      ]
+    ],
+    "candidate": [
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 158942,
+          "ns_per_op": 735.5,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 149428,
+          "ns_per_op": 797.9,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 161294,
+          "ns_per_op": 760.4,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 133689,
+          "ns_per_op": 836.9,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 28418,
+          "ns_per_op": 3911.0,
+          "go_bytes_per_op": 11122,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 31154,
+          "ns_per_op": 3824.0,
+          "go_bytes_per_op": 11118,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 31831,
+          "ns_per_op": 3736.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 32632,
+          "ns_per_op": 3635.0,
+          "go_bytes_per_op": 11118,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 252,
+          "ns_per_op": 475289.0,
+          "go_bytes_per_op": 2140166,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 244,
+          "ns_per_op": 481635.0,
+          "go_bytes_per_op": 2140990,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 237,
+          "ns_per_op": 495935.0,
+          "go_bytes_per_op": 2128374,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 243,
+          "ns_per_op": 492735.0,
+          "go_bytes_per_op": 2136751,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 161808,
+          "ns_per_op": 726.1,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 153685,
+          "ns_per_op": 779.7,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 169783,
+          "ns_per_op": 729.2,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 154484,
+          "ns_per_op": 776.3,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 34123,
+          "ns_per_op": 3635.0,
+          "go_bytes_per_op": 11121,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 33423,
+          "ns_per_op": 3580.0,
+          "go_bytes_per_op": 11118,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 34034,
+          "ns_per_op": 4099.0,
+          "go_bytes_per_op": 11122,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 30097,
+          "ns_per_op": 3975.0,
+          "go_bytes_per_op": 11123,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 232,
+          "ns_per_op": 494438.0,
+          "go_bytes_per_op": 2128665,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 247,
+          "ns_per_op": 479675.0,
+          "go_bytes_per_op": 2144960,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 250,
+          "ns_per_op": 486645.0,
+          "go_bytes_per_op": 2148827,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 250,
+          "ns_per_op": 495514.0,
+          "go_bytes_per_op": 2157280,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 159732,
+          "ns_per_op": 736.5,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 153968,
+          "ns_per_op": 790.3,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 164085,
+          "ns_per_op": 745.8,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 152865,
+          "ns_per_op": 795.7,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 31598,
+          "ns_per_op": 3708.0,
+          "go_bytes_per_op": 11122,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 32740,
+          "ns_per_op": 3631.0,
+          "go_bytes_per_op": 11118,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 32756,
+          "ns_per_op": 3611.0,
+          "go_bytes_per_op": 11121,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 32400,
+          "ns_per_op": 3731.0,
+          "go_bytes_per_op": 11121,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 249,
+          "ns_per_op": 500835.0,
+          "go_bytes_per_op": 2140470,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 235,
+          "ns_per_op": 506239.0,
+          "go_bytes_per_op": 2128491,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 236,
+          "ns_per_op": 501507.0,
+          "go_bytes_per_op": 2141873,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 249,
+          "ns_per_op": 480848.0,
+          "go_bytes_per_op": 2140472,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 163796,
+          "ns_per_op": 727.7,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 155197,
+          "ns_per_op": 796.0,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 158448,
+          "ns_per_op": 755.4,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 147235,
+          "ns_per_op": 806.1,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 32902,
+          "ns_per_op": 3735.0,
+          "go_bytes_per_op": 11121,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 32661,
+          "ns_per_op": 3768.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 32226,
+          "ns_per_op": 3738.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 32103,
+          "ns_per_op": 3796.0,
+          "go_bytes_per_op": 11119,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 242,
+          "ns_per_op": 506705.0,
+          "go_bytes_per_op": 2145572,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 234,
+          "ns_per_op": 506845.0,
+          "go_bytes_per_op": 2142104,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 228,
+          "ns_per_op": 510453.0,
+          "go_bytes_per_op": 2133540,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 243,
+          "ns_per_op": 488556.0,
+          "go_bytes_per_op": 2132394,
+          "go_allocs_per_op": 7
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "iterations": 150943,
+          "ns_per_op": 775.7,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "iterations": 148102,
+          "ns_per_op": 850.1,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "iterations": 134173,
+          "ns_per_op": 825.1,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "iterations": 139870,
+          "ns_per_op": 842.3,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "iterations": 30998,
+          "ns_per_op": 3825.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "iterations": 29962,
+          "ns_per_op": 3718.0,
+          "go_bytes_per_op": 11119,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "iterations": 32886,
+          "ns_per_op": 3667.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "iterations": 32467,
+          "ns_per_op": 3682.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "iterations": 253,
+          "ns_per_op": 490227.0,
+          "go_bytes_per_op": 2152602,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "iterations": 244,
+          "ns_per_op": 491363.0,
+          "go_bytes_per_op": 2127993,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "iterations": 243,
+          "ns_per_op": 492534.0,
+          "go_bytes_per_op": 2141101,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "iterations": 243,
+          "ns_per_op": 517703.0,
+          "go_bytes_per_op": 2136750,
+          "go_allocs_per_op": 7
+        }
+      ]
+    ]
+  },
+  "sse": {
+    "baseline": [
+      [
+        {
+          "allocated_bytes_per_stream": 11106941,
+          "allocation_calls_per_stream": 189739,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 10230694.333333334,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 8487279,
+          "allocation_calls_per_stream": 110519,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 4430125.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 19221952,
+          "allocation_calls_per_stream": 19352,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 6175527.666666667,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18490597,
+          "allocation_calls_per_stream": 11353,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 1993305.6666666667,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 11106941,
+          "allocation_calls_per_stream": 189739,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 8429958.333333334,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 8487279,
+          "allocation_calls_per_stream": 110519,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 4394041.666666667,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 19221952,
+          "allocation_calls_per_stream": 19352,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 6154486.333333333,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18490597,
+          "allocation_calls_per_stream": 11353,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 2025639.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 11106941,
+          "allocation_calls_per_stream": 189739,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 8386375.0,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 8487279,
+          "allocation_calls_per_stream": 110519,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 4482069.666666667,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 19221952,
+          "allocation_calls_per_stream": 19352,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 6323319.333333333,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18490597,
+          "allocation_calls_per_stream": 11353,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 2165250.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 11106941,
+          "allocation_calls_per_stream": 189739,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 8470361.333333334,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 8487279,
+          "allocation_calls_per_stream": 110519,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 4405514.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 19221952,
+          "allocation_calls_per_stream": 19352,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 6198333.333333333,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18490597,
+          "allocation_calls_per_stream": 11353,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 2029736.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 11106941,
+          "allocation_calls_per_stream": 189739,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 8544250.0,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 8487279,
+          "allocation_calls_per_stream": 110519,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 4512097.333333333,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 19221952,
+          "allocation_calls_per_stream": 19352,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 6235708.333333333,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18490597,
+          "allocation_calls_per_stream": 11353,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 2015625.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ]
+    ],
+    "candidate": [
+      [
+        {
+          "allocated_bytes_per_stream": 6787176,
+          "allocation_calls_per_stream": 70011,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 5309458.333333334,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 6795367,
+          "allocation_calls_per_stream": 70007,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 3752569.6666666665,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 17734385,
+          "allocation_calls_per_stream": 7255,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 5578416.666666667,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18321571,
+          "allocation_calls_per_stream": 7225,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 1942639.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 6787176,
+          "allocation_calls_per_stream": 70011,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 5261166.666666666,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 6795367,
+          "allocation_calls_per_stream": 70007,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 3727250.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 17734385,
+          "allocation_calls_per_stream": 7255,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 5530416.666666666,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18321571,
+          "allocation_calls_per_stream": 7225,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 1927597.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 6787176,
+          "allocation_calls_per_stream": 70011,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 5679069.333333333,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 6795367,
+          "allocation_calls_per_stream": 70007,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 4092611.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 17734385,
+          "allocation_calls_per_stream": 7255,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 5816250.0,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18321571,
+          "allocation_calls_per_stream": 7225,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 2156875.0,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 6787176,
+          "allocation_calls_per_stream": 70011,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 5273708.333333333,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 6795367,
+          "allocation_calls_per_stream": 70007,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 3773652.6666666665,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 17734385,
+          "allocation_calls_per_stream": 7255,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 5532416.666666667,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18321571,
+          "allocation_calls_per_stream": 7225,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 1931569.6666666667,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ],
+      [
+        {
+          "allocated_bytes_per_stream": 6787176,
+          "allocation_calls_per_stream": 70011,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 5379764.0,
+          "reader_capacity": 7,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 6795367,
+          "allocation_calls_per_stream": 70007,
+          "events": 10000,
+          "iterations": 3,
+          "ns_per_stream": 3758513.6666666665,
+          "reader_capacity": 8192,
+          "wire_bytes": 1673041,
+          "workload": "text10K",
+          "name": "text10K/reader8192"
+        },
+        {
+          "allocated_bytes_per_stream": 17734385,
+          "allocation_calls_per_stream": 7255,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 5718791.666666667,
+          "reader_capacity": 7,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader7"
+        },
+        {
+          "allocated_bytes_per_stream": 18321571,
+          "allocation_calls_per_stream": 7225,
+          "events": 1024,
+          "iterations": 3,
+          "ns_per_stream": 2014152.6666666667,
+          "reader_capacity": 8192,
+          "wire_bytes": 4363689,
+          "workload": "mixed1MiB",
+          "name": "mixed1MiB/reader8192"
+        }
+      ]
+    ]
+  },
+  "reply": {
+    "legacy": [
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 53631.25,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 332918.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 520547.9,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 5248118.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 3361031.25,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 41948278.0,
+          "rust_allocations_per_op": 50.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 21345.8,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 332918.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 325816.65,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 5248118.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 2636545.85,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 41948278.0,
+          "rust_allocations_per_op": 50.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 23212.5,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 332918.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 351845.8,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 5248118.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 3104956.25,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 41948278.0,
+          "rust_allocations_per_op": 50.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 22291.65,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 332918.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 414933.35,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 5248118.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 2951052.1,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 41948278.0,
+          "rust_allocations_per_op": 50.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 22589.6,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 332918.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 342362.5,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 5248118.0,
+          "rust_allocations_per_op": 50.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 3003768.75,
+          "route": "legacy",
+          "rust_allocated_bytes_per_op": 41948278.0,
+          "rust_allocations_per_op": 50.0
+        }
+      ]
+    ],
+    "borrowed": [
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 19922.9,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 197650.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 342189.6,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 3146770.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 2292954.15,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 25166866.0,
+          "rust_allocations_per_op": 10.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 20118.75,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 197650.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 303337.5,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 3146770.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 2261383.35,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 25166866.0,
+          "rust_allocations_per_op": 10.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 20570.8,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 197650.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 355491.7,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 3146770.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 2486214.6,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 25166866.0,
+          "rust_allocations_per_op": 10.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 19614.6,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 197650.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 310481.25,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 3146770.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 2369820.85,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 25166866.0,
+          "rust_allocations_per_op": 10.0
+        }
+      ],
+      [
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 65536,
+          "encoded_bytes": 65867,
+          "iterations": 20,
+          "ns_per_op": 19881.25,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 197650.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 1048576,
+          "encoded_bytes": 1048907,
+          "iterations": 20,
+          "ns_per_op": 339020.85,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 3146770.0,
+          "rust_allocations_per_op": 10.0
+        },
+        {
+          "allocation_iterations": 10,
+          "base64_bytes": 8388608,
+          "encoded_bytes": 8388939,
+          "iterations": 20,
+          "ns_per_op": 2412181.25,
+          "route": "borrowed",
+          "rust_allocated_bytes_per_op": 25166866.0,
+          "rust_allocations_per_op": 10.0
+        }
+      ]
+    ]
+  },
+  "pipe": {
+    "legacy": [
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 189188.0,
+          "go_bytes_per_op": 65896,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 1662619.0,
+          "go_bytes_per_op": 1050234,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 19646473.0,
+          "go_bytes_per_op": 8390056,
+          "go_allocs_per_op": 9
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 127831.0,
+          "go_bytes_per_op": 66162,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 1390394.0,
+          "go_bytes_per_op": 1050285,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 16880300.0,
+          "go_bytes_per_op": 8390057,
+          "go_allocs_per_op": 9
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 117408.0,
+          "go_bytes_per_op": 66162,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 1643794.0,
+          "go_bytes_per_op": 1049682,
+          "go_allocs_per_op": 8
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 17069652.0,
+          "go_bytes_per_op": 8390323,
+          "go_allocs_per_op": 9
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 126408.0,
+          "go_bytes_per_op": 66162,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 1459940.0,
+          "go_bytes_per_op": 1049961,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 17068508.0,
+          "go_bytes_per_op": 8390602,
+          "go_allocs_per_op": 10
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 151827.0,
+          "go_bytes_per_op": 65896,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 1475540.0,
+          "go_bytes_per_op": 1049960,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/legacy",
+          "iterations": 20,
+          "ns_per_op": 17148944.0,
+          "go_bytes_per_op": 8390329,
+          "go_allocs_per_op": 9
+        }
+      ]
+    ],
+    "borrowed": [
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 117317.0,
+          "go_bytes_per_op": 66170,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 1573179.0,
+          "go_bytes_per_op": 1050240,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 16124015.0,
+          "go_bytes_per_op": 8390330,
+          "go_allocs_per_op": 9
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 118823.0,
+          "go_bytes_per_op": 66170,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 1398615.0,
+          "go_bytes_per_op": 1050223,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 16066867.0,
+          "go_bytes_per_op": 8390324,
+          "go_allocs_per_op": 9
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 117631.0,
+          "go_bytes_per_op": 65904,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 1414523.0,
+          "go_bytes_per_op": 1049956,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 15947333.0,
+          "go_bytes_per_op": 8390328,
+          "go_allocs_per_op": 9
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 123188.0,
+          "go_bytes_per_op": 66170,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 1581523.0,
+          "go_bytes_per_op": 1049968,
+          "go_allocs_per_op": 8
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 18032875.0,
+          "go_bytes_per_op": 8390339,
+          "go_allocs_per_op": 9
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 126671.0,
+          "go_bytes_per_op": 66170,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 1513729.0,
+          "go_bytes_per_op": 1049969,
+          "go_allocs_per_op": 8
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/borrowed",
+          "iterations": 20,
+          "ns_per_op": 17802458.0,
+          "go_bytes_per_op": 8390324,
+          "go_allocs_per_op": 9
+        }
+      ]
+    ]
+  },
+  "medians": {
+    "events": {
+      "baseline": [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "ns_per_op": 902.3,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "ns_per_op": 960.9,
+          "go_bytes_per_op": 1181,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "ns_per_op": 925.3,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "ns_per_op": 995.5,
+          "go_bytes_per_op": 1182,
+          "go_allocs_per_op": 5
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "ns_per_op": 7660.0,
+          "go_bytes_per_op": 11179,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "ns_per_op": 7755.0,
+          "go_bytes_per_op": 11178,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "ns_per_op": 7622.0,
+          "go_bytes_per_op": 11177,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "ns_per_op": 7329.0,
+          "go_bytes_per_op": 11177,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "ns_per_op": 1292485.0,
+          "go_bytes_per_op": 2137997,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "ns_per_op": 1299092.0,
+          "go_bytes_per_op": 2159227,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "ns_per_op": 1273138.0,
+          "go_bytes_per_op": 2137640,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "ns_per_op": 1280135.0,
+          "go_bytes_per_op": 2137640,
+          "go_allocs_per_op": 7
+        }
+      ],
+      "candidate": [
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers0",
+          "ns_per_op": 735.5,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions1/Subscribers1",
+          "ns_per_op": 796.0,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers0",
+          "ns_per_op": 755.4,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Text/Sessions16/Subscribers1",
+          "ns_per_op": 806.1,
+          "go_bytes_per_op": 1146,
+          "go_allocs_per_op": 4
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers0",
+          "ns_per_op": 3735.0,
+          "go_bytes_per_op": 11121,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions1/Subscribers1",
+          "ns_per_op": 3718.0,
+          "go_bytes_per_op": 11118,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers0",
+          "ns_per_op": 3736.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool4KiB/Sessions16/Subscribers1",
+          "ns_per_op": 3731.0,
+          "go_bytes_per_op": 11120,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers0",
+          "ns_per_op": 494438.0,
+          "go_bytes_per_op": 2140470,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions1/Subscribers1",
+          "ns_per_op": 491363.0,
+          "go_bytes_per_op": 2140990,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers0",
+          "ns_per_op": 495935.0,
+          "go_bytes_per_op": 2141101,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkEventTypedPublish/Tool1MiB/Sessions16/Subscribers1",
+          "ns_per_op": 492735.0,
+          "go_bytes_per_op": 2136751,
+          "go_allocs_per_op": 7
+        }
+      ]
+    },
+    "sse": {
+      "baseline": [
+        {
+          "name": "text10K/reader7",
+          "ns_per_stream": 8470361.333333334,
+          "allocation_calls_per_stream": 189739,
+          "allocated_bytes_per_stream": 11106941
+        },
+        {
+          "name": "text10K/reader8192",
+          "ns_per_stream": 4430125.0,
+          "allocation_calls_per_stream": 110519,
+          "allocated_bytes_per_stream": 8487279
+        },
+        {
+          "name": "mixed1MiB/reader7",
+          "ns_per_stream": 6198333.333333333,
+          "allocation_calls_per_stream": 19352,
+          "allocated_bytes_per_stream": 19221952
+        },
+        {
+          "name": "mixed1MiB/reader8192",
+          "ns_per_stream": 2025639.0,
+          "allocation_calls_per_stream": 11353,
+          "allocated_bytes_per_stream": 18490597
+        }
+      ],
+      "candidate": [
+        {
+          "name": "text10K/reader7",
+          "ns_per_stream": 5309458.333333334,
+          "allocation_calls_per_stream": 70011,
+          "allocated_bytes_per_stream": 6787176
+        },
+        {
+          "name": "text10K/reader8192",
+          "ns_per_stream": 3758513.6666666665,
+          "allocation_calls_per_stream": 70007,
+          "allocated_bytes_per_stream": 6795367
+        },
+        {
+          "name": "mixed1MiB/reader7",
+          "ns_per_stream": 5578416.666666667,
+          "allocation_calls_per_stream": 7255,
+          "allocated_bytes_per_stream": 17734385
+        },
+        {
+          "name": "mixed1MiB/reader8192",
+          "ns_per_stream": 1942639.0,
+          "allocation_calls_per_stream": 7225,
+          "allocated_bytes_per_stream": 18321571
+        }
+      ]
+    },
+    "reply": {
+      "legacy": [
+        {
+          "base64_bytes": 65536,
+          "ns_per_op": 22589.6,
+          "rust_allocated_bytes_per_op": 332918.0,
+          "rust_allocations_per_op": 50.0,
+          "encoded_bytes": 65867
+        },
+        {
+          "base64_bytes": 1048576,
+          "ns_per_op": 351845.8,
+          "rust_allocated_bytes_per_op": 5248118.0,
+          "rust_allocations_per_op": 50.0,
+          "encoded_bytes": 1048907
+        },
+        {
+          "base64_bytes": 8388608,
+          "ns_per_op": 3003768.75,
+          "rust_allocated_bytes_per_op": 41948278.0,
+          "rust_allocations_per_op": 50.0,
+          "encoded_bytes": 8388939
+        }
+      ],
+      "borrowed": [
+        {
+          "base64_bytes": 65536,
+          "ns_per_op": 19922.9,
+          "rust_allocated_bytes_per_op": 197650.0,
+          "rust_allocations_per_op": 10.0,
+          "encoded_bytes": 65867
+        },
+        {
+          "base64_bytes": 1048576,
+          "ns_per_op": 339020.85,
+          "rust_allocated_bytes_per_op": 3146770.0,
+          "rust_allocations_per_op": 10.0,
+          "encoded_bytes": 1048907
+        },
+        {
+          "base64_bytes": 8388608,
+          "ns_per_op": 2369820.85,
+          "rust_allocated_bytes_per_op": 25166866.0,
+          "rust_allocations_per_op": 10.0,
+          "encoded_bytes": 8388939
+        }
+      ]
+    },
+    "pipe": {
+      "legacy": [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/legacy",
+          "ns_per_op": 127831.0,
+          "go_bytes_per_op": 66162,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/legacy",
+          "ns_per_op": 1475540.0,
+          "go_bytes_per_op": 1049961,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/legacy",
+          "ns_per_op": 17069652.0,
+          "go_bytes_per_op": 8390323,
+          "go_allocs_per_op": 9
+        }
+      ],
+      "borrowed": [
+        {
+          "name": "BenchmarkCuaReplyPipeline/64KiB/borrowed",
+          "ns_per_op": 118823.0,
+          "go_bytes_per_op": 66170,
+          "go_allocs_per_op": 7
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/1024KiB/borrowed",
+          "ns_per_op": 1513729.0,
+          "go_bytes_per_op": 1049969,
+          "go_allocs_per_op": 9
+        },
+        {
+          "name": "BenchmarkCuaReplyPipeline/8192KiB/borrowed",
+          "ns_per_op": 16124015.0,
+          "go_bytes_per_op": 8390328,
+          "go_allocs_per_op": 9
+        }
+      ]
+    }
+  },
+  "limits": [
+    "Synthetic data only; no model, screenshot, native input or permissions.",
+    "Events include typed Sink, JSON wire, ledger, checkpoint and optional channel; no socket or renderer.",
+    "SSE includes headers, framing, actual DTO JSON decode and global cursor; no socket or renderer.",
+    "Cua isolated replies measure envelope/JSON work; pipe samples include a warm worker and complete Go decode/image identity checks. SDK/capture/thumbnail/model excluded.",
+    "Go B/op and Rust allocation requests are cumulative, not peak RSS. Rust realloc counts the requested new size.",
+    "Mutex profiles are diagnostic and excluded from timing medians."
+  ]
+}

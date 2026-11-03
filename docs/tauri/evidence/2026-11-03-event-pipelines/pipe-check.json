@@ -1,0 +1,111 @@
+{
+  "reason": "Investigate nearly-flat 1MiB pipe timing from short batches; original samples retained",
+  "rounds": 7,
+  "iterations": 200,
+  "samples": {
+    "legacy": [
+      {
+        "iterations": 200,
+        "ns_per_op": 1450875.0,
+        "go_bytes_per_op": 1049678,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1574755.0,
+        "go_bytes_per_op": 1049813,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1359263.0,
+        "go_bytes_per_op": 1049649,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1486023.0,
+        "go_bytes_per_op": 1049547,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1579729.0,
+        "go_bytes_per_op": 1049870,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1361885.0,
+        "go_bytes_per_op": 1049865,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1433542.0,
+        "go_bytes_per_op": 1049683,
+        "go_allocs_per_op": 8
+      }
+    ],
+    "borrowed": [
+      {
+        "iterations": 200,
+        "ns_per_op": 1427537.0,
+        "go_bytes_per_op": 1049926,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1402556.0,
+        "go_bytes_per_op": 1049795,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1389019.0,
+        "go_bytes_per_op": 1049849,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1387300.0,
+        "go_bytes_per_op": 1049819,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1545868.0,
+        "go_bytes_per_op": 1049659,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1375462.0,
+        "go_bytes_per_op": 1049847,
+        "go_allocs_per_op": 8
+      },
+      {
+        "iterations": 200,
+        "ns_per_op": 1436198.0,
+        "go_bytes_per_op": 1049821,
+        "go_allocs_per_op": 8
+      }
+    ]
+  },
+  "medians": {
+    "legacy": {
+      "ns_per_op": 1450875.0,
+      "go_bytes_per_op": 1049683,
+      "go_allocs_per_op": 8
+    },
+    "borrowed": {
+      "ns_per_op": 1402556.0,
+      "go_bytes_per_op": 1049821,
+      "go_allocs_per_op": 8
+    }
+  },
+  "binary_sha256": {
+    "go_pipe": "906838d0ab3b57580afec20989036b813fb0ac2c97a95db4dc726cc4d01cd176",
+    "cua_reply": "475ee68663305dd82cf20f1da7ba739d37c16bd912e58df7dfcbb0e39f682635"
+  }
+}

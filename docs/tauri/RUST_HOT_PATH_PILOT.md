@@ -296,3 +296,137 @@ unchanged. Protected 0.1.71 and 0.1.72 packages live outside the bundler cleanup
 directory in `desktop/tauri/target/releases.noindex/`; each release's receipt
 records package verification. Linux/Windows native acceptance and whole-app
 peak memory remain unmeasured.
+
+## Follow-up: event and reply pipelines, 0.1.73
+
+This slice implements the three candidates identified after 0.1.72. The fixed
+comparison commit is `bab3297ba129a0a8db5393e765a5638501713adb`. There is no SDK,
+dependency, persisted session format, model sampling or permission-policy
+change.
+
+### Ownership and compatibility
+
+Go Agent events still pass through the same ToWire and JSON encoding. Only
+after encoding succeeds, a small typed public checkpoint update is prepared
+before publication takes the shared mutex. Tool arguments/results and
+reasoning are absent from that update. Publication, ledger sequencing, live
+state changes and subscriber fanout remain atomic under the original lock.
+Raw publishers retain the original JSON interpretation, parsed before the
+lock. The wire ledger still retains the complete unchanged payload.
+
+Text and tool names preserve JSON's per-invalid-byte UTF-8 replacement.
+Preparation first takes a bounded rune prefix, avoiding a full invalid-input
+rune allocation. Tool identifiers/names own their small string storage, and
+answer text is copied by the existing builder. Limits, lifecycle resets,
+private-content exclusion, inactive eviction, failed serialization and raw
+malformed-payload behavior are checked against a frozen 0.1.72 JSON oracle.
+
+The Rust host reuses one SSE line buffer and a local header buffer. Every
+event/ignored/error/EOF/cancel path clears its line length; capacity above
+64 KiB is dropped rather than retained after an exceptional large frame.
+Returned BridgeEvent values own their fields. Header/frame byte limits,
+global cursors, duplicate rejection, gap resync, EOF reconnect and cooperative
+cancellation keep the original behavior.
+
+The Cua worker serializes borrowed image strings directly into the reply,
+avoiding the intermediate image Value trees. Small structured/action/preview
+values keep their old representation. Exact compact JSON byte comparisons
+check key order, source identity, full image data, null versus absent fields,
+refused/error completion and original oversized-reply behavior. Crossing the
+15 MiB limit still removes only optional preview, then leaves a still-oversized
+original reply for the existing stop condition. No screenshot, coordinate,
+input, authorization or retry decision is changed.
+
+### Serial offline results
+
+The runner builds everything before timing and alternates routes across five
+rounds. Go event baselines are built from the exact archived source, with only
+the shared public-API benchmark injected. SSE includes both actual decoders
+with the host's locked serde versions. Cua legacy and borrowed constructors
+are checked for identical bytes before measurement. Rust allocation counting
+is separate from CPU timing. Source, runner and binary hashes, individual
+samples and medians are in
+[`benchmark.json`](evidence/2026-11-03-event-pipelines/benchmark.json).
+
+Go measurements include typed Sink, wire encoding, the ledger's full payload
+copy, checkpoint and optional subscriber delivery/drain. Synthetic source
+setup and ring prefill are excluded. These are single-event medians; model,
+socket and rendering work are excluded.
+
+| Go event fixture | 0.1.72 | 0.1.73 |
+| --- | ---: | ---: |
+| Text, 1 session, no subscriber | 0.90 µs | 0.74 µs |
+| 4KiB tool result, 1 session, no subscriber | 7.66 µs | 3.73 µs |
+| 1MiB tool result, 1 session, no subscriber | 1.292 ms | 0.494 ms |
+| 1MiB tool result, 16 sessions, 1 subscriber | 1.280 ms | 0.493 ms |
+
+Large-event Go allocations remain approximately 2.14 MB/operation: JSON wire
+and ledger copies still exist. The gain comes mainly from avoiding the local
+JSON decode and shortening the shared critical section. Separate 100-operation
+parallel mutex diagnostics support that interpretation; their aggregated
+blocking samples are not a latency percentile or a timing gate. Raw
+[baseline](evidence/2026-11-03-event-pipelines/baseline-mutex.txt) and
+[candidate](evidence/2026-11-03-event-pipelines/candidate-mutex.txt) profiles are
+retained separately from unprofiled timing.
+
+SSE measurements include HTTP headers, actual Go-style id/event/data/blank
+framing, BridgeEvent JSON decode and global cursor admission. Fixtures contain
+public synthetic text and mixed terminal/tool frames. The 7-byte reader is a
+fragmentation stress case; 8192 bytes matches the ordinary buffer scale.
+
+| Complete SSE stream | 0.1.72 | 0.1.73 | Allocation calls per stream |
+| --- | ---: | ---: | ---: |
+| 10K small frames, 8192-byte reader | 4.43 ms | 3.76 ms | 110,519 → 70,007 |
+| 10K small frames, 7-byte reader | 8.47 ms | 5.31 ms | 189,739 → 70,011 |
+| Mixed 1MiB frames, 8192-byte reader | 2.03 ms | 1.94 ms | 11,353 → 7,225 |
+
+Cua reply-only measurements exclude SDK dispatch, screen capture, thumbnail
+calculation and model requests. The isolated Rust path includes construction
+and JSON encoding; the persistent-worker pipe path adds complete Go decoding
+and full image/source identity validation. Original base64 image size and
+encoded output bytes are identical across routes.
+
+| Cua reply fixture | Legacy tree | Borrowed envelope | Rust allocation requests |
+| --- | ---: | ---: | ---: |
+| 64KiB image, isolated Rust | 0.023 ms | 0.020 ms | 0.333 → 0.198 MB |
+| 1MiB image, isolated Rust | 0.352 ms | 0.339 ms | 5.248 → 3.147 MB |
+| 8MiB image, isolated Rust | 3.004 ms | 2.370 ms | 41.948 → 25.167 MB |
+| 8MiB image, full warm pipe/Go decode | 17.070 ms | 16.124 ms | Go remains 8.390 MB |
+
+The original 20-operation 1MiB pipe batches were nearly flat, at 1.476 versus
+1.514 ms. A targeted same-binary follow-up with seven alternating rounds of
+200 operations measured 1.451 versus 1.403 ms and 8 Go allocations in both
+routes. Both sets of samples are retained in the main report and
+[`pipe check`](evidence/2026-11-03-event-pipelines/pipe-check.json). No blanket
+full-pipeline speedup is claimed. The larger measured benefit is reduced Rust
+temporary allocation, approximately 40% at 8MiB, with a modest pipe gain there.
+
+Go B/op and counted Rust allocation requests are cumulative, not peak RSS.
+Rust realloc accounting counts the requested new capacity. These fixtures do
+not establish whole-application, capture, model or WebView latency changes.
+
+```sh
+python3 tools/tauri/bench-event-pipelines.py --output /tmp/reasonix-event-bench
+```
+
+### Verification and release
+
+Full Go race suites passed for desktopbridge, computeruse, the desktop bridge,
+eventwire and billing. A pre-existing eventwire compatibility test mixed wire
+serialization with a changing catalog anchor and failed identically on the
+fixed baseline. It now supplies clearly synthetic CostQuote data and retains
+all aliases, basis and scheduling-metadata assertions, with stronger value
+checks. Production billing, prices and serializer code are unchanged.
+
+The adapter's 28 tests include exact reply bytes and real 15MiB boundary cases;
+the host's 358 tests passed with 6 existing ignored tests. SSE lifecycle tests
+cover both ordinary reuse and release after large/cancelled/invalid frames.
+Production clippy, frontend/build contracts and package verification are
+recorded in the release receipt. No real screen capture, user input, model
+request or permissions change was used. Linux/Windows native acceptance and
+whole-app peak RSS remain outside this macOS batch.
+
+The 0.1.72 rollback and 0.1.73 release are archived under
+`desktop/tauri/target/releases.noindex/`, outside bundler cleanup. Completing
+these three measured slices does not remove the Go core or establish that all
+application performance work is finished.

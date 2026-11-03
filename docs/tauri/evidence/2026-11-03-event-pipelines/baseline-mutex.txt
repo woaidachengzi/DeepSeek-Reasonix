@@ -1,0 +1,12 @@
+File: baseline-events.test
+Type: delay
+Time: 2026-11-03 15:54:40 CST
+Showing nodes accounting for 605.09ms, 99.72% of 606.80ms total
+Dropped 69 nodes (cum <= 3.03ms)
+      flat  flat%   sum%        cum   cum%
+  605.09ms 99.72% 99.72%   605.09ms 99.72%  sync.(*Mutex).Unlock
+         0     0% 99.72%   605.10ms 99.72%  reasonix/internal/desktopbridge.(*EventStream).Sink.func1
+         0     0% 99.72%   605.10ms 99.72%  reasonix/internal/desktopbridge.(*EventStream).publish
+         0     0% 99.72%   605.09ms 99.72%  reasonix/internal/desktopbridge.BenchmarkEventTypedConcurrent.func1.2
+         0     0% 99.72%   605.10ms 99.72%  reasonix/internal/event.FuncSink.Emit
+         0     0% 99.72%   605.09ms 99.72%  testing.(*B).RunParallel.func1

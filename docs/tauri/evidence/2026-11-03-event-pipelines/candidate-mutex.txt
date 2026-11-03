@@ -1,0 +1,17 @@
+File: candidate-events.test
+Type: delay
+Time: 2026-11-03 15:54:41 CST
+Showing nodes accounting for 53.12ms, 100% of 53.12ms total
+Dropped 39 nodes (cum <= 0.27ms)
+Showing top 10 nodes out of 33
+      flat  flat%   sum%        cum   cum%
+   50.12ms 94.35% 94.35%    50.12ms 94.35%  sync.(*Mutex).Unlock
+       3ms  5.65%   100%        3ms  5.65%  runtime.unlock (partial-inline)
+         0     0%   100%     0.33ms  0.61%  reasonix/internal/desktopbridge.(*EventLedger).Append
+         0     0%   100%    50.47ms 95.00%  reasonix/internal/desktopbridge.(*EventStream).Sink.func1
+         0     0%   100%    50.45ms 94.96%  reasonix/internal/desktopbridge.(*EventStream).publishLive
+         0     0%   100%    50.47ms 95.00%  reasonix/internal/desktopbridge.BenchmarkEventTypedConcurrent.func1.2
+         0     0%   100%    50.47ms 95.00%  reasonix/internal/event.FuncSink.Emit
+         0     0%   100%     0.93ms  1.76%  runtime.asyncPreempt2.func1
+         0     0%   100%     1.15ms  2.16%  runtime.findRunnable
+         0     0%   100%     0.61ms  1.15%  runtime.forEachP
