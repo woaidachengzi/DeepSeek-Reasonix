@@ -37,6 +37,20 @@ const TranscriptRowView = memo(function TranscriptRowView({
   );
 });
 
+const TranscriptBlockContent = memo(function TranscriptBlockContent({
+  block, tabId, renderRow,
+}: {
+  block: TimelineBlock;
+  tabId?: string;
+  renderRow: (row: TranscriptRow) => ReactNode;
+}) {
+  return <>{block.rows.map((row) => (
+    <TranscriptRowView key={row.key} row={row} tabId={tabId}>
+      {renderRow(row)}
+    </TranscriptRowView>
+  ))}</>;
+});
+
 export const TranscriptBlockView = memo(function TranscriptBlockView({
   block,
   tabId,
@@ -58,11 +72,7 @@ export const TranscriptBlockView = memo(function TranscriptBlockView({
       data-transcript-content-revision={block.contentRevision}
       data-transcript-measurement-revision={block.measurementRevision}
     >
-      {block.rows.map((row) => (
-        <TranscriptRowView key={row.key} row={row} tabId={tabId}>
-          {renderRow(row)}
-        </TranscriptRowView>
-      ))}
+      <TranscriptBlockContent block={block} tabId={tabId} renderRow={renderRow} />
     </div>
   );
 });

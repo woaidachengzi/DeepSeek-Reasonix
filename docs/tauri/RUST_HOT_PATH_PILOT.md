@@ -642,3 +642,85 @@ No install, TCC reset, push, paid model, capture or other-OS acceptance is part
 of this release. The achieved goal is the measured allocation fixes plus a
 reproducible search/renderer audit, not completion of every scenario in the
 original Rust migration table.
+
+
+## Follow-up: renderer content/placement isolation, 0.1.77
+
+The previous native baseline retained long cold-navigation frames. Chrome
+CPU/DevTools diagnostics located repeated content construction and DOM updates
+under React's layout/position commits. A single traced run is not a benchmark:
+complete task duration was effectively flat (940.3 → 948.2 ms), although script
+and individual React commit samples suggested avoidable work. The diagnostic
+[summary and raw trace hashes](evidence/2026-11-03-render-content/profile-summary.json)
+are kept separately from native timing evidence.
+
+A memoized semantic-content child now sits under each existing block host.
+Position/index updates still reach that host immediately; unchanged block,
+tab and renderer references reuse its content. New content, callback or tab
+props render normally. There is no custom equality shortcut, semantic hash
+cache, new DOM wrapper, persistent transcript cache or altered key. This
+avoids rebuilding message elements when only the window's placement changes.
+Context/subscription updates in descendants retain their normal React paths.
+
+The measurement ledger also accepts a lazy estimate fallback. A published DOM
+size now bypasses text-height estimation; an unmeasured or merely staged size
+still uses the current estimator. Retiring the real measurement restores that
+fallback. Staging/publication, window origin, native ownership and the single
+physical writer are unchanged. The block mount cap stays 40 and bottom stays
+4px. No observer is skipped and no safe-mode or coverage gate is relaxed.
+
+The new deterministic DOM test verifies unchanged-content render counts across
+successive placements, exact native block/row identity, committed style/index,
+focus and selection endpoints, content patches, current action closures, tab
+replacement and new block identity. It is included in `test:transcript` and
+ordinary test typechecking. Existing materialization/Kernel/selection races,
+production build gates and full browser regressions remain required.
+
+### Serial native comparison
+
+Production 0.1.76 assets were copied from the clean `e12e0b909` build before
+candidate compilation. The runner uses the same probe for both directories,
+checks exact asset hashes and rejects any source/build mutation. Five old/new
+rounds alternate route order; an entire warm-up pair is excluded. Compiler,
+launch and activation settling are outside timed navigation. A startup delay
+allows ordinary LaunchServices activation to complete, but success still
+requires foreground focus/visibility and every original geometry gate.
+An earlier background warm-up failed and was discarded as a whole run; it was
+not counted or accepted by changing the pass conditions.
+
+Each version completed 45 product question navigations and 430 sampled frames
+in fresh nonpersistent 1200×800 WKWebViews. Page identity, meaningful content,
+framework-overlay, warning/error console, runtime errors, screenshot and
+interaction gates passed. Samples and source/build hashes are in
+[comparison.json](evidence/2026-11-03-render-content/comparison.json).
+
+| Native synthetic 1K-turn workload | 0.1.76 | Candidate |
+| --- | ---: | ---: |
+| Navigation landing median | 67 ms | 60 ms |
+| Median of each run's rAF-interval P95 | 43 ms | 37 ms |
+| Worst sampled rAF interval | 75 ms | 73 ms |
+| rAF intervals above 50 ms | 20 | 20 |
+| Empty sampled viewports | 0 | 0 |
+| Maximum mounted block hosts | 40 | 40 |
+
+The modest median improvement does not eliminate cold-navigation long frames.
+These are shared production-renderer/mock-adapter measurements, not Tauri IPC,
+model/network latency, physical wheel input or real-history data. The probe's
+geometry work is included; rAF cadence is not paint time, CPU long-task duration
+or FPS. Larger Markdown/table/code fixtures and isolation of the remaining
+cold-load React/layout work remain future renderer profiling targets.
+
+```sh
+# Build each source version separately first. Keep dependencies locked/offline.
+python3 tools/tauri/bench-transcript-comparison.py \
+  --baseline-dist /tmp/reasonix-0176-dist \
+  --baseline-commit e12e0b909fed25909258fc4bc09623ac784c07b7 \
+  --candidate-dist desktop/frontend/dist \
+  --output /tmp/reasonix-native-comparison
+```
+
+The standalone native runner also accepts `--frontend-dist`; its default and
+all earlier invocation paths remain unchanged. No new dependency, SDK pin,
+permission, native input or model call is introduced. 0.1.77 packaging uses the
+clean reviewed commit and archives outside DMG bundler cleanup, retaining
+0.1.76 as rollback.

@@ -11,8 +11,8 @@ export type TranscriptMeasurementChange = {
 export class TranscriptMeasurementLedger {
   private sizes: ReadonlyMap<string, number> = new Map();
   private staged = new Map<string, number>();
-  sizeFor(key: string, fallback: number): number {
-    return this.sizes.get(key) ?? fallback;
+  sizeFor(key: string, fallback: number | (() => number)): number {
+    return this.sizes.get(key) ?? (typeof fallback === "function" ? fallback() : fallback);
   }
 
   commit(changes: readonly TranscriptMeasurementChange[]): boolean {

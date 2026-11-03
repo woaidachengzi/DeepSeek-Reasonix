@@ -1,0 +1,33 @@
+{
+  "scope": "One instrumented Chrome diagnostic per build, including fixture setup. Not a latency benchmark or native WebView measurement; profiler/tracing perturb execution. Complete task duration is effectively flat; React commit samples suggested redundant content updates. Raw files retained in task scratch directory.",
+  "profiles": {
+    "chrome-baseline": {
+      "metrics_ms": {
+        "LayoutDuration": 104.774,
+        "RecalcStyleDuration": 96.959,
+        "ScriptDuration": 568.257,
+        "TaskDuration": 940.294
+      },
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "raw_sha256": {
+        "cpu.json": "18108b4832daa6cf7f72d523512870ee800f2e2d6ee91121e4356089bff89c7b",
+        "trace.json": "2a3580f0a0ecaee1efedc9545a67d6c3291aa3441aa3fd0690f187b7dad1dd7d",
+        "result.json": "ec37c5d64f2f0d59d89f871bacbfb836e8fb8dcb5ba9a2c6e0c8e8a93f4e73fe"
+      }
+    },
+    "chrome-candidate": {
+      "metrics_ms": {
+        "LayoutDuration": 116.651,
+        "RecalcStyleDuration": 113.641,
+        "ScriptDuration": 523.603,
+        "TaskDuration": 948.247
+      },
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+      "raw_sha256": {
+        "cpu.json": "1d75884ae41bcbb2f285fdde8ee83bebbad524d64fe2ab5113b2d28062235adf",
+        "trace.json": "496b04bff4f5692c2773acec3a3087013eff6ded32e29cfdaa25842c8ed9fd67",
+        "result.json": "66e2595a7eea0c1a34ae40ac6b05dec05e3fff72759d9c31496a54fd5c6048b8"
+      }
+    }
+  }
+}

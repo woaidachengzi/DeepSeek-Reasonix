@@ -83,7 +83,7 @@ export default function TranscriptWindow({
     getScrollElement: () => scrollElement,
     estimateSize: (index) => {
       const block = split.cold[index];
-      return measurementLedger.sizeFor(block.key, estimateBlock(block));
+      return measurementLedger.sizeFor(block.key, () => estimateBlock(block));
     },
     getItemKey: (index) => split.cold[index].key,
     overscan: 0,

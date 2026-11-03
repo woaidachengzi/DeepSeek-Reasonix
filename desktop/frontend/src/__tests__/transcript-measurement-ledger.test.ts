@@ -54,5 +54,21 @@ ledger.stage([{ key: "turn:before-anchor", size: 180 }]);
 ok(ledger.publishStaged().length === 0, "expand then collapse before release discards the superseded staged size");
 ok(ledger.sizeFor("turn:before-anchor", 0) === 180, "collapsed content retains its original measured extent");
 
+let estimates = 0;
+const estimate = () => { estimates++; return 171; };
+ok(ledger.sizeFor("turn:1", estimate) === 140 && estimates === 0,
+  "an authoritative DOM size avoids evaluating an expensive text estimate");
+ok(ledger.sizeFor("unmeasured", estimate) === 171 && estimates === 1,
+  "an unmeasured block still evaluates its current estimate");
+ledger.stage([{ key: "unmeasured", size: 600 }]);
+ok(ledger.sizeFor("unmeasured", estimate) === 171 && estimates === 2,
+  "an unpublished staged size cannot replace the fallback during native ownership");
+ledger.publishStaged();
+ok(ledger.sizeFor("unmeasured", estimate) === 600 && estimates === 2,
+  "publishing the real size bypasses later estimates");
+ledger.retain(new Set(["turn:1"]));
+ok(ledger.sizeFor("unmeasured", estimate) === 171 && estimates === 3,
+  "retiring a measurement restores current estimation without a stale cached fallback");
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

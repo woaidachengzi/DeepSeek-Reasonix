@@ -43,12 +43,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--rounds', default=3, type=int)
+    parser.add_argument('--frontend-dist', type=Path, default=ROOT / 'desktop/frontend/dist')
     args = parser.parse_args()
     if sys.platform != 'darwin' or args.rounds < 1:
         parser.error('macOS and positive rounds required')
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False, mode=0o700)
-    dist = ROOT / 'desktop/frontend/dist'
+    dist = args.frontend_dist.resolve()
     if not (dist / 'index.html').is_file():
         parser.error('build desktop/frontend first; dependencies are not installed by this runner')
     hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in SOURCES}
@@ -83,6 +84,9 @@ def main():
                     deadline = time.monotonic() + 10
                     while not Path(str(result) + '.pid').exists() and process.poll() is None and time.monotonic() < deadline:
                         time.sleep(0.1)
+                    # Present after LaunchServices finishes initial activation;
+                    # this delay is outside all measured navigation work.
+                    time.sleep(3)
                     # Request ordinary foreground presentation of our already
                     # started test app; sampling begins only after it paints.
                     subprocess.run(['open', str(app)], check=True, env=env, timeout=10)
