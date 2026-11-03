@@ -1,0 +1,1379 @@
+{
+  "baseline_commit": "083cad4dc651f6c6a2fbd9a541f9a9098f0029d4",
+  "baseline_runtime": "archived bounded constructor",
+  "candidate_commit": "9a02808cee515e54038a192d77a8cf7e178f50ae",
+  "candidate_status": "",
+  "platform": "macOS-27.2-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "go": "go version go1.27.3 darwin/arm64",
+  "rounds": 5,
+  "iterations": 20,
+  "scope": "In-process authenticated production HTTP handler, manager, controller, session, projection and JSON encoding; no socket, Rust decode, renderer, model or native capture. Setup and prewarming are untimed. Rewrite includes copying replacement messages. Go allocations are cumulative per operation, not peak RSS.",
+  "source_sha256": {
+    "cmd/reasonix-desktop-bridge/core_runtime.go": "6d4ee135ca7ed30f330b17a0a27f2fa2a500687a83d0db34a4b79752af42fe5b",
+    "cmd/reasonix-desktop-bridge/history_page.go": "6933c1da03c7bd8cc38667738f70cb5c17f6aa13e2c2e77d257d30162ea10511",
+    "cmd/reasonix-desktop-bridge/history_reader.go": "49d09c3ee885ed7bbd8fe0eff2adbafb3b6ee8473558b967d3249f34a085a9d5",
+    "internal/agent/conversation_prefix.go": "f1d95abb9ff835d8341af07875e3f982b52b5dd9a948078b95621b3a9a3bdb96",
+    "internal/agent/conversation_prefix_accumulator.go": "0c0b23f4b6a85190b7a3c63e790fe1a88150510f7ce2359464582a4bdb0fd445",
+    "internal/agent/session.go": "b8cb667169a992dbd6d1ef03f8b97c9d1bdf0d6142bf5eefffd9bb171096e3db",
+    "internal/agent/preview.go": "b55c7aabd6555853aa34610f42fc6bba31e4f0e3ebdbc9544d1253481d9aa49a",
+    "internal/agent/session_history_delta.go": "8c41ec3a233a03be7681c0114f02f263b390e4324765e299f9f03596ed8ff3b6",
+    "internal/agent/save_dag.go": "ac239783f9d378208f86486e1c3eb2e01f50ccd0faa695a51025b6d7b89738f9",
+    "internal/agent/save_dag_plan.go": "b0611670ea578459651e26f1f006217adaeca37ae579e02dcbb2e683e3c81c28",
+    "internal/agent/tool_result_checkpoint.go": "58927067d9aa9f1a636b0320c3c76b579cbb9cffee7db142160fd5ee00b0dbc2",
+    "internal/control/controller.go": "8db8603871151a43be56ffdda77c79988ba18a77dff999a2082f27c291c0f1e3",
+    "internal/control/history_delta.go": "706a785056f242699d9fe9cb635566c16b0e9d751a2f039dbfca651105b388e3",
+    "internal/desktopbridge/runtime.go": "3c493031004aca20730194e3441a3000227a40c3f6859f8c26f09b5150306858",
+    "internal/desktopbridge/history_page.go": "04b63b31f4623faafffa116f0dbc03fa464f292b4ea91d0d56deebf5520bd472",
+    "cmd/reasonix-desktop-bridge/history_page_benchmark_test.go": "7dadd429804059424134392937463ca5acd242ea62662a5692d1dad3ed5cce7d",
+    "cmd/reasonix-desktop-bridge/history_page_integration_test.go": "30b010b92645bdc4ea77721ccfe8ec274b73aff80e03e46d90b64dd676884b38"
+  },
+  "binary_sha256": {
+    "baseline": "712469f57ad31b437dcb30d8c368a236c4825da5113de40604028a4a2206917c",
+    "candidate": "50525cbd4c8b8e449c47365c23e5af6b4b3707fba1f8ef927dc35c168c4b8a82"
+  },
+  "samples": {
+    "baseline": [
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 82740.0,
+          "go_bytes_per_op": 96652,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 108000.0,
+          "go_bytes_per_op": 117296,
+          "go_allocs_per_op": 673
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1122181.0,
+          "go_bytes_per_op": 3133952,
+          "go_allocs_per_op": 9645
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1313854.0,
+          "go_bytes_per_op": 2555333,
+          "go_allocs_per_op": 9656
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 64462.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 144394.0,
+          "go_bytes_per_op": 102428,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 11590883.0,
+          "go_bytes_per_op": 28988860,
+          "go_allocs_per_op": 90655
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 11291310.0,
+          "go_bytes_per_op": 23222991,
+          "go_allocs_per_op": 90662
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 67162.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 419446.0,
+          "go_bytes_per_op": 102710,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 57568940.0,
+          "go_bytes_per_op": 144341548,
+          "go_allocs_per_op": 450659
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 57354158.0,
+          "go_bytes_per_op": 115539754,
+          "go_allocs_per_op": 450666
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 67596.0,
+          "go_bytes_per_op": 96647,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 157069.0,
+          "go_bytes_per_op": 102565,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 20297662.0,
+          "go_bytes_per_op": 40901080,
+          "go_allocs_per_op": 90655
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 20248594.0,
+          "go_bytes_per_op": 35132870,
+          "go_allocs_per_op": 90657
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 63665.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 103806.0,
+          "go_bytes_per_op": 109536,
+          "go_allocs_per_op": 671
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1192190.0,
+          "go_bytes_per_op": 3134362,
+          "go_allocs_per_op": 9646
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1382058.0,
+          "go_bytes_per_op": 2554910,
+          "go_allocs_per_op": 9654
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 64915.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 149533.0,
+          "go_bytes_per_op": 102698,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 11831477.0,
+          "go_bytes_per_op": 28989432,
+          "go_allocs_per_op": 90658
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 11723290.0,
+          "go_bytes_per_op": 23223320,
+          "go_allocs_per_op": 90664
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 67940.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 419071.0,
+          "go_bytes_per_op": 102708,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 58967338.0,
+          "go_bytes_per_op": 144341036,
+          "go_allocs_per_op": 450657
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 60264746.0,
+          "go_bytes_per_op": 115539405,
+          "go_allocs_per_op": 450664
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 63142.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 160156.0,
+          "go_bytes_per_op": 102636,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 20787881.0,
+          "go_bytes_per_op": 40902225,
+          "go_allocs_per_op": 90658
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 20453110.0,
+          "go_bytes_per_op": 35133033,
+          "go_allocs_per_op": 90658
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 61150.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 98650.0,
+          "go_bytes_per_op": 102133,
+          "go_allocs_per_op": 671
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1269602.0,
+          "go_bytes_per_op": 3134430,
+          "go_allocs_per_op": 9647
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1425696.0,
+          "go_bytes_per_op": 2555397,
+          "go_allocs_per_op": 9656
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 77017.0,
+          "go_bytes_per_op": 96647,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 159500.0,
+          "go_bytes_per_op": 102423,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 11877550.0,
+          "go_bytes_per_op": 28988883,
+          "go_allocs_per_op": 90655
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 11850340.0,
+          "go_bytes_per_op": 23222904,
+          "go_allocs_per_op": 90662
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 64338.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 416260.0,
+          "go_bytes_per_op": 102710,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 63940577.0,
+          "go_bytes_per_op": 144341420,
+          "go_allocs_per_op": 450659
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 59523502.0,
+          "go_bytes_per_op": 115539421,
+          "go_allocs_per_op": 450664
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 64752.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 158098.0,
+          "go_bytes_per_op": 102712,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 20747077.0,
+          "go_bytes_per_op": 40901893,
+          "go_allocs_per_op": 90658
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 20929442.0,
+          "go_bytes_per_op": 35133516,
+          "go_allocs_per_op": 90657
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 65915.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 86365.0,
+          "go_bytes_per_op": 109586,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1121546.0,
+          "go_bytes_per_op": 3134048,
+          "go_allocs_per_op": 9646
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1317300.0,
+          "go_bytes_per_op": 2554694,
+          "go_allocs_per_op": 9653
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 68608.0,
+          "go_bytes_per_op": 96647,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 166144.0,
+          "go_bytes_per_op": 102356,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 12710144.0,
+          "go_bytes_per_op": 28989810,
+          "go_allocs_per_op": 90660
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 11937973.0,
+          "go_bytes_per_op": 23222693,
+          "go_allocs_per_op": 90660
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 61827.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 406312.0,
+          "go_bytes_per_op": 102715,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 59221096.0,
+          "go_bytes_per_op": 144341893,
+          "go_allocs_per_op": 450661
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 57096398.0,
+          "go_bytes_per_op": 115539883,
+          "go_allocs_per_op": 450667
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 61685.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 154898.0,
+          "go_bytes_per_op": 102649,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 20946162.0,
+          "go_bytes_per_op": 40900070,
+          "go_allocs_per_op": 90655
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 20402138.0,
+          "go_bytes_per_op": 35134909,
+          "go_allocs_per_op": 90661
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 62677.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 112164.0,
+          "go_bytes_per_op": 132836,
+          "go_allocs_per_op": 675
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1143058.0,
+          "go_bytes_per_op": 3134030,
+          "go_allocs_per_op": 9646
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1368000.0,
+          "go_bytes_per_op": 2555110,
+          "go_allocs_per_op": 9655
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 73788.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 147244.0,
+          "go_bytes_per_op": 102698,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 11716321.0,
+          "go_bytes_per_op": 28989157,
+          "go_allocs_per_op": 90656
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 11476023.0,
+          "go_bytes_per_op": 23223190,
+          "go_allocs_per_op": 90663
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 64900.0,
+          "go_bytes_per_op": 96649,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 420821.0,
+          "go_bytes_per_op": 102717,
+          "go_allocs_per_op": 672
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 61455600.0,
+          "go_bytes_per_op": 144342616,
+          "go_allocs_per_op": 450664
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 58229165.0,
+          "go_bytes_per_op": 115541268,
+          "go_allocs_per_op": 450673
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 63721.0,
+          "go_bytes_per_op": 96647,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 153915.0,
+          "go_bytes_per_op": 110455,
+          "go_allocs_per_op": 674
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 21192440.0,
+          "go_bytes_per_op": 40901480,
+          "go_allocs_per_op": 90656
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 20144671.0,
+          "go_bytes_per_op": 35132892,
+          "go_allocs_per_op": 90657
+        }
+      ]
+    ],
+    "candidate": [
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 87100.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 81512.0,
+          "go_bytes_per_op": 97968,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1008450.0,
+          "go_bytes_per_op": 902293,
+          "go_allocs_per_op": 1348
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 955533.0,
+          "go_bytes_per_op": 321296,
+          "go_allocs_per_op": 1349
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 68696.0,
+          "go_bytes_per_op": 96578,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 121514.0,
+          "go_bytes_per_op": 97907,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 8460200.0,
+          "go_bytes_per_op": 6087411,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 8304452.0,
+          "go_bytes_per_op": 323278,
+          "go_allocs_per_op": 1356
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 61890.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 394198.0,
+          "go_bytes_per_op": 97895,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 42531192.0,
+          "go_bytes_per_op": 29123417,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 40734519.0,
+          "go_bytes_per_op": 323870,
+          "go_allocs_per_op": 1358
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 67933.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 149654.0,
+          "go_bytes_per_op": 105714,
+          "go_allocs_per_op": 626
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 16450954.0,
+          "go_bytes_per_op": 6077300,
+          "go_allocs_per_op": 1345
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 17633919.0,
+          "go_bytes_per_op": 309488,
+          "go_allocs_per_op": 1348
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 89310.0,
+          "go_bytes_per_op": 96726,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 80467.0,
+          "go_bytes_per_op": 97900,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1046683.0,
+          "go_bytes_per_op": 902296,
+          "go_allocs_per_op": 1348
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1006460.0,
+          "go_bytes_per_op": 321442,
+          "go_allocs_per_op": 1350
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 66640.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 136425.0,
+          "go_bytes_per_op": 97897,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 8861544.0,
+          "go_bytes_per_op": 6087621,
+          "go_allocs_per_op": 1348
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 8600223.0,
+          "go_bytes_per_op": 323230,
+          "go_allocs_per_op": 1356
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 63985.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 374342.0,
+          "go_bytes_per_op": 97895,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 43039319.0,
+          "go_bytes_per_op": 29123420,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 42383169.0,
+          "go_bytes_per_op": 323307,
+          "go_allocs_per_op": 1357
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 71404.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 132802.0,
+          "go_bytes_per_op": 97892,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 16427223.0,
+          "go_bytes_per_op": 6076226,
+          "go_allocs_per_op": 1345
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 15799863.0,
+          "go_bytes_per_op": 309508,
+          "go_allocs_per_op": 1348
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 89638.0,
+          "go_bytes_per_op": 96720,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 77596.0,
+          "go_bytes_per_op": 97902,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1019596.0,
+          "go_bytes_per_op": 902411,
+          "go_allocs_per_op": 1349
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1004815.0,
+          "go_bytes_per_op": 321628,
+          "go_allocs_per_op": 1351
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 70131.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 137910.0,
+          "go_bytes_per_op": 97895,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 8604786.0,
+          "go_bytes_per_op": 6087413,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 8664258.0,
+          "go_bytes_per_op": 323387,
+          "go_allocs_per_op": 1356
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 67000.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 369567.0,
+          "go_bytes_per_op": 97900,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 42888269.0,
+          "go_bytes_per_op": 29123298,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 41371548.0,
+          "go_bytes_per_op": 323346,
+          "go_allocs_per_op": 1357
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 70104.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 132542.0,
+          "go_bytes_per_op": 97895,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 16535333.0,
+          "go_bytes_per_op": 6076176,
+          "go_allocs_per_op": 1345
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 16001594.0,
+          "go_bytes_per_op": 309508,
+          "go_allocs_per_op": 1348
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 77108.0,
+          "go_bytes_per_op": 96718,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 77025.0,
+          "go_bytes_per_op": 97973,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1068081.0,
+          "go_bytes_per_op": 902894,
+          "go_allocs_per_op": 1350
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 1013165.0,
+          "go_bytes_per_op": 321442,
+          "go_allocs_per_op": 1350
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 66252.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 149192.0,
+          "go_bytes_per_op": 97895,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 9121146.0,
+          "go_bytes_per_op": 6087420,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 8796761.0,
+          "go_bytes_per_op": 322989,
+          "go_allocs_per_op": 1354
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 64435.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 372610.0,
+          "go_bytes_per_op": 97897,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 43821808.0,
+          "go_bytes_per_op": 29123417,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 43005650.0,
+          "go_bytes_per_op": 322634,
+          "go_allocs_per_op": 1353
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 68929.0,
+          "go_bytes_per_op": 96578,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 140612.0,
+          "go_bytes_per_op": 97892,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 16356542.0,
+          "go_bytes_per_op": 6075122,
+          "go_allocs_per_op": 1342
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 16060242.0,
+          "go_bytes_per_op": 309485,
+          "go_allocs_per_op": 1348
+        }
+      ],
+      [
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Warm",
+          "iterations": 20,
+          "ns_per_op": 85954.0,
+          "go_bytes_per_op": 96720,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Append",
+          "iterations": 20,
+          "ns_per_op": 76500.0,
+          "go_bytes_per_op": 97973,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 1035987.0,
+          "go_bytes_per_op": 902477,
+          "go_allocs_per_op": 1349
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/1K/Cold",
+          "iterations": 20,
+          "ns_per_op": 998890.0,
+          "go_bytes_per_op": 321456,
+          "go_allocs_per_op": 1350
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Warm",
+          "iterations": 20,
+          "ns_per_op": 71450.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Append",
+          "iterations": 20,
+          "ns_per_op": 132627.0,
+          "go_bytes_per_op": 105648,
+          "go_allocs_per_op": 626
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 8800029.0,
+          "go_bytes_per_op": 6087430,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10K/Cold",
+          "iterations": 20,
+          "ns_per_op": 8668242.0,
+          "go_bytes_per_op": 323230,
+          "go_allocs_per_op": 1356
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Warm",
+          "iterations": 20,
+          "ns_per_op": 62800.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Append",
+          "iterations": 20,
+          "ns_per_op": 391546.0,
+          "go_bytes_per_op": 97895,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 43309504.0,
+          "go_bytes_per_op": 29123317,
+          "go_allocs_per_op": 1347
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/50K/Cold",
+          "iterations": 20,
+          "ns_per_op": 41873156.0,
+          "go_bytes_per_op": 323162,
+          "go_allocs_per_op": 1355
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+          "iterations": 20,
+          "ns_per_op": 75088.0,
+          "go_bytes_per_op": 96576,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+          "iterations": 20,
+          "ns_per_op": 143685.0,
+          "go_bytes_per_op": 97895,
+          "go_allocs_per_op": 625
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+          "iterations": 20,
+          "ns_per_op": 16663221.0,
+          "go_bytes_per_op": 6076151,
+          "go_allocs_per_op": 1345
+        },
+        {
+          "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+          "iterations": 20,
+          "ns_per_op": 15819412.0,
+          "go_bytes_per_op": 309454,
+          "go_allocs_per_op": 1345
+        }
+      ]
+    ]
+  },
+  "medians": {
+    "baseline": [
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Warm",
+        "ns_per_op": 63665.0,
+        "go_bytes_per_op": 96649,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Append",
+        "ns_per_op": 103806.0,
+        "go_bytes_per_op": 109586,
+        "go_allocs_per_op": 672
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+        "ns_per_op": 1143058.0,
+        "go_bytes_per_op": 3134048,
+        "go_allocs_per_op": 9646
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Cold",
+        "ns_per_op": 1368000.0,
+        "go_bytes_per_op": 2555110,
+        "go_allocs_per_op": 9655
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Warm",
+        "ns_per_op": 68608.0,
+        "go_bytes_per_op": 96649,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Append",
+        "ns_per_op": 149533.0,
+        "go_bytes_per_op": 102428,
+        "go_allocs_per_op": 672
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+        "ns_per_op": 11831477.0,
+        "go_bytes_per_op": 28989157,
+        "go_allocs_per_op": 90656
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Cold",
+        "ns_per_op": 11723290.0,
+        "go_bytes_per_op": 23222991,
+        "go_allocs_per_op": 90662
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Warm",
+        "ns_per_op": 64900.0,
+        "go_bytes_per_op": 96649,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Append",
+        "ns_per_op": 419071.0,
+        "go_bytes_per_op": 102710,
+        "go_allocs_per_op": 672
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+        "ns_per_op": 59221096.0,
+        "go_bytes_per_op": 144341548,
+        "go_allocs_per_op": 450659
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Cold",
+        "ns_per_op": 58229165.0,
+        "go_bytes_per_op": 115539754,
+        "go_allocs_per_op": 450666
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+        "ns_per_op": 63721.0,
+        "go_bytes_per_op": 96649,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+        "ns_per_op": 157069.0,
+        "go_bytes_per_op": 102649,
+        "go_allocs_per_op": 672
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+        "ns_per_op": 20787881.0,
+        "go_bytes_per_op": 40901480,
+        "go_allocs_per_op": 90656
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+        "ns_per_op": 20402138.0,
+        "go_bytes_per_op": 35133033,
+        "go_allocs_per_op": 90657
+      }
+    ],
+    "candidate": [
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Warm",
+        "ns_per_op": 87100.0,
+        "go_bytes_per_op": 96720,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Append",
+        "ns_per_op": 77596.0,
+        "go_bytes_per_op": 97968,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Rewrite",
+        "ns_per_op": 1035987.0,
+        "go_bytes_per_op": 902411,
+        "go_allocs_per_op": 1349
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/1K/Cold",
+        "ns_per_op": 1004815.0,
+        "go_bytes_per_op": 321442,
+        "go_allocs_per_op": 1350
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Warm",
+        "ns_per_op": 68696.0,
+        "go_bytes_per_op": 96576,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Append",
+        "ns_per_op": 136425.0,
+        "go_bytes_per_op": 97897,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Rewrite",
+        "ns_per_op": 8800029.0,
+        "go_bytes_per_op": 6087420,
+        "go_allocs_per_op": 1347
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10K/Cold",
+        "ns_per_op": 8664258.0,
+        "go_bytes_per_op": 323230,
+        "go_allocs_per_op": 1356
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Warm",
+        "ns_per_op": 63985.0,
+        "go_bytes_per_op": 96576,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Append",
+        "ns_per_op": 374342.0,
+        "go_bytes_per_op": 97895,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Rewrite",
+        "ns_per_op": 43039319.0,
+        "go_bytes_per_op": 29123417,
+        "go_allocs_per_op": 1347
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/50K/Cold",
+        "ns_per_op": 41873156.0,
+        "go_bytes_per_op": 323307,
+        "go_allocs_per_op": 1357
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Warm",
+        "ns_per_op": 70104.0,
+        "go_bytes_per_op": 96576,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Append",
+        "ns_per_op": 140612.0,
+        "go_bytes_per_op": 97895,
+        "go_allocs_per_op": 625
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Rewrite",
+        "ns_per_op": 16450954.0,
+        "go_bytes_per_op": 6076176,
+        "go_allocs_per_op": 1345
+      },
+      {
+        "name": "BenchmarkHistoryHTTP/10KTool4KiB/Cold",
+        "ns_per_op": 16001594.0,
+        "go_bytes_per_op": 309488,
+        "go_allocs_per_op": 1348
+      }
+    ]
+  }
+}

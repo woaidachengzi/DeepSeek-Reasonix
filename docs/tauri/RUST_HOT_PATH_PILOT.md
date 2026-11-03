@@ -185,3 +185,114 @@ are unchanged. Rollback is the protected 0.1.70 package in
 directory; 0.1.71 is archived beside it. Native package checks are recorded in
 that release's verification receipt. Linux/Windows native acceptance remains
 outside this macOS batch.
+
+## Follow-up: bounded cold rebuilds, 0.1.72
+
+0.1.71 made unchanged reads and appends cheap; its first projection and prefix
+rewrites still allocated a complete provider-message snapshot and constructed
+display rows that were immediately evicted. A synthetic 50K cold-read CPU and
+allocation profile identified full message-value copies, reflection/value
+boxing and Marshal output copies as the main allocation sources. SHA-256 was
+a small part of CPU time, so moving that calculation alone into Rust would
+not address the measured problem.
+
+The new Go path captures one request-local Session reader and fixes its prefix
+identity/count. It copies at most 64 message values per short read lock into a
+reused scratch buffer; hashing and display work happen after releasing the
+lock. A reverse scan finds the last 200 actual display rows. The forward scan
+still visits every message for prefix identity, total and usage, but constructs
+text, tokens and usage snapshots only for that retained tail. Ordinary appends
+keep the prior incremental path. This reduces allocations of full arrays, not
+the total number of canonical message values visited or copied.
+
+A prefix rewrite invalidates a chunked attempt. An independent candidate is
+installed only after every chunk succeeds. At most two attempts are made,
+then the original atomic Snapshot/Delta path supplies a consistent fallback.
+Pure appends can advance the live Session while the reader consumes its fixed
+earlier count. The request reader may retain its source Session; the resident
+cache continues to hold only the small identity token and display projection.
+Scratch references are cleared at return. No JSON hashing or callbacks run
+while holding the Session lock, and no second canonical writer was added.
+
+The prefix accumulator now borrows an addressable message only during encoding
+and reuses a default JSON Encoder writing into the hash. Its bytes remain
+exactly the original Marshal output followed by one newline; the independent
+old prefix-token function remains the oracle. Encoder still buffers a complete
+single message internally: this is not a streaming parser or constant-memory
+claim for arbitrarily large individual messages. Encoding failure drops the
+encoder/hash and retains only a static failure marker. Plain text without an
+XML opening delimiter skips the wrapper regex copies; wrapper, handoff,
+RawContent and legacy Memory v5 behavior retain their existing rules.
+
+### Comparison with the already optimized 0.1.71
+
+The exact baseline is `083cad4dc651f6c6a2fbd9a541f9a9098f0029d4`. Its archived
+bounded constructor is retained, rather than replacing it with the older full
+History fallback. The same 5-round, 20-operation, alternating-order HTTP harness
+and timing boundaries described above are used. Candidate production source
+hashes and binary hashes are recorded in
+[`benchmark.json`](evidence/2026-11-03-history-rebuild/benchmark.json).
+
+| Raw fixture / operation | 0.1.71 | 0.1.72 | Go allocated bytes per operation |
+| --- | ---: | ---: | ---: |
+| 1K / initial projection | 1.37 ms | 1.00 ms | 2.55 → 0.321 MB |
+| 10K / initial projection | 11.72 ms | 8.66 ms | 23.22 → 0.323 MB |
+| 50K / initial projection | 58.23 ms | 41.87 ms | 115.54 → 0.323 MB |
+| 50K / same-length rewrite | 59.22 ms | 43.04 ms | 144.34 → 29.12 MB |
+| 50K / unchanged | 0.065 ms | 0.064 ms | 0.097 → 0.097 MB |
+| 50K / append two | 0.419 ms | 0.374 ms | 0.103 → 0.098 MB |
+| 10K, 4KiB tool results / initial projection | 20.40 ms | 16.00 ms | 35.13 → 0.309 MB |
+
+The 50K cold sample reduces cumulative Go allocated bytes by about 99.7% and
+latency by about 28%. Rewrite includes the caller's full replacement-slice
+copy, which remains necessary in that fixture and explains its larger byte
+count. First projection and rewrites remain O(total messages), and the retry
+fallback can still allocate an atomic full snapshot. These are in-process
+synthetic HTTP measurements, not peak RSS, whole-app startup, WebView frame
+time, model latency or a Go-versus-Rust benchmark.
+
+The short 1K unchanged sample varied from 0.064 to 0.087 ms across versions.
+A targeted follow-up using the same binaries, seven alternating rounds and
+2,000 operations per round measured 0.0702 versus 0.0708 ms, with 625 allocations
+in both versions. Both the original samples and the longer
+[`warm check`](evidence/2026-11-03-history-rebuild/warm-check.json) are retained;
+no small unchanged-read speedup is claimed.
+
+```sh
+python3 tools/tauri/bench-history-page.py \
+  --baseline 083cad4dc651f6c6a2fbd9a541f9a9098f0029d4 \
+  --output /tmp/reasonix-history-rebuild-bench
+```
+
+### Verification and remaining candidates
+
+Full agent, control, desktopbridge and desktop-bridge race suites passed.
+Additional deterministic cases cover reverse/forward chunk boundaries,
+mid-build rewrites, no publication of partial candidates, bounded retries,
+atomic fallback, fixed-count concurrent appends and cleared scratch references.
+The original complete projector and prefix-token oracle check exact display,
+usage, Unicode, privacy and fork-token parity.
+
+The full desktop suite exposed an existing Ask/MCP fixture race: event receipt
+and registered identity can precede clearing the queued flag. A test-only sink
+barrier reproduces that window on 0.1.71. The fixture now waits for the exact
+public scoped prompt reader and cancels/joins its goroutines before store
+cleanup. Patched current and baseline tests each passed 20 race repetitions;
+production prompt/permission guards and replay/owner rejection assertions are
+unchanged. Existing full-repository lint baseline failures remain; scanned
+finding weights did not increase from 0.1.71.
+
+The next candidates were audited but are not implemented or assigned speedups
+in this slice:
+
+| Candidate | Next evidence needed |
+| --- | --- |
+| Go event publish re-parses JSON under the shared live-state lock | Mixed large tool events, parallel sessions and a mutex profile before replacing the local JSON round trip with typed deltas. |
+| Rust SSE allocates a vector for each line | Complete decoder allocation/latency measurements while retaining frame caps, cancellation and resync behavior. |
+| Rust Cua reply builds an intermediate JSON tree containing image strings | Typed-envelope versus current worker measurements, preserving full model images, identities, reply limits and optional-preview fallback. |
+
+The pinned SDK, session format, provider behavior and approval policy are
+unchanged. Protected 0.1.71 and 0.1.72 packages live outside the bundler cleanup
+directory in `desktop/tauri/target/releases.noindex/`; each release's receipt
+records package verification. Linux/Windows native acceptance and whole-app
+peak memory remain unmeasured.

@@ -1,0 +1,112 @@
+{
+  "reason": "Investigate 1K unchanged-read variance in short 20-iteration batches",
+  "workload": "BenchmarkHistoryHTTP/1K/Warm",
+  "rounds": 7,
+  "iterations": 2000,
+  "samples": {
+    "baseline": [
+      {
+        "iterations": 2000,
+        "ns_per_op": 70263.0,
+        "go_bytes_per_op": 97630,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 69411.0,
+        "go_bytes_per_op": 97785,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 69152.0,
+        "go_bytes_per_op": 97862,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 68516.0,
+        "go_bytes_per_op": 97708,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 70162.0,
+        "go_bytes_per_op": 97865,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 72478.0,
+        "go_bytes_per_op": 97631,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 72506.0,
+        "go_bytes_per_op": 98327,
+        "go_allocs_per_op": 625
+      }
+    ],
+    "candidate": [
+      {
+        "iterations": 2000,
+        "ns_per_op": 73330.0,
+        "go_bytes_per_op": 98021,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 70790.0,
+        "go_bytes_per_op": 98795,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 69699.0,
+        "go_bytes_per_op": 98018,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 74587.0,
+        "go_bytes_per_op": 98176,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 70772.0,
+        "go_bytes_per_op": 97708,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 72574.0,
+        "go_bytes_per_op": 97786,
+        "go_allocs_per_op": 625
+      },
+      {
+        "iterations": 2000,
+        "ns_per_op": 69897.0,
+        "go_bytes_per_op": 97863,
+        "go_allocs_per_op": 625
+      }
+    ]
+  },
+  "medians": {
+    "baseline": {
+      "ns_per_op": 70162.0,
+      "go_bytes_per_op": 97785,
+      "go_allocs_per_op": 625
+    },
+    "candidate": {
+      "ns_per_op": 70790.0,
+      "go_bytes_per_op": 98018,
+      "go_allocs_per_op": 625
+    }
+  },
+  "binary_sha256": {
+    "baseline": "712469f57ad31b437dcb30d8c368a236c4825da5113de40604028a4a2206917c",
+    "candidate": "50525cbd4c8b8e449c47365c23e5af6b4b3707fba1f8ef927dc35c168c4b8a82"
+  }
+}
