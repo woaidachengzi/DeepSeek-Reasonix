@@ -1098,18 +1098,6 @@ func bridgeHistoryMessageContent(message provider.Message) string {
 	return message.Content
 }
 
-// History makes only user- and assistant-visible text available to the host.
-// The controller transcript also contains system prompts, provider reasoning,
-// tool requests/results, image references, and local execution metadata; none
-// of those are a safe or stable first bridge contract.
-func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
-	return projectBridgeHistory(r.controller.History())
-}
-
-func (r *controllerRuntime) HistoryPage(limit int) ([]desktopbridge.HistoryMessage, int) {
-	return r.historyCache.page(r.controller, limit)
-}
-
 func projectBridgeHistory(history []provider.Message) []desktopbridge.HistoryMessage {
 	messages := make([]desktopbridge.HistoryMessage, 0, len(history))
 	tokens, _ := agent.ConversationPrefixTokens(history)

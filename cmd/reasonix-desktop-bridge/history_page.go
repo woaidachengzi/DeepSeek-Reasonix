@@ -15,6 +15,16 @@ import (
 // results, reasoning and image data never become resident cache entries.
 const bridgeHistoryCacheCapacity = 200
 
+// History returns only display text; canonical reasoning, tool data and local
+// execution metadata remain within the controller's private transcript.
+func (r *controllerRuntime) History() []desktopbridge.HistoryMessage {
+	return projectBridgeHistory(r.controller.History())
+}
+
+func (r *controllerRuntime) HistoryPage(limit int) ([]desktopbridge.HistoryMessage, int) {
+	return r.historyCache.page(r.controller, limit)
+}
+
 type cachedBridgeHistoryMessage struct {
 	value        desktopbridge.HistoryMessage
 	localFailure bool

@@ -23,10 +23,8 @@ type Session struct {
 	Messages       []provider.Message
 	version        uint64
 	rewriteVersion int // bumped each time the log is rewritten (compact/fold)
-	// historyEpoch fences in-memory prefix changes that are not persisted-history
-	// rewrites, including Replace, unpersisted tool guards and save-time ID repair.
-	// It is independent of rewriteVersion so display readers cannot change save
-	// conflict classification merely by requiring a stricter append-only fence.
+	// historyEpoch fences Replace, unpersisted guards and save-time ID repair.
+	// Separate from rewriteVersion, it preserves persistence conflict semantics.
 	historyEpoch uint64
 	// historyIdentity lets cursors recognize replacement sessions without
 	// retaining this Session or its private transcript after an executor swap.

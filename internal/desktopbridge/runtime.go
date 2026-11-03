@@ -219,15 +219,6 @@ type HistoryView struct {
 
 const maxHistoryMessages = 200
 
-// RuntimeHistoryPageProvider avoids constructing the full display transcript
-// when only its newest page is needed. Both results must describe the same
-// snapshot: at most limit newest messages and the total projected message count.
-// Returned data must remain unchanged after return; the manager copies it before
-// exposing it to callers. Runtimes without this optional surface use History.
-type RuntimeHistoryPageProvider interface {
-	HistoryPage(limit int) (messages []HistoryMessage, total int)
-}
-
 // Runtime is the minimal core lifecycle surface needed by the first bridge
 // vertical slices. Implementations must make Shutdown durable before releasing
 // their core resources.
@@ -987,29 +978,6 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 		StartIndex:    start,
 		TotalMessages: total,
 	}, nil
-}
-
-// Keep provider-owned caches isolated from callers, including nested usage
-// counters. make also preserves the protocol's [] rather than null empty page.
-func cloneHistoryMessages(messages []HistoryMessage) []HistoryMessage {
-	page := make([]HistoryMessage, len(messages))
-	copy(page, messages)
-	for i := range page {
-		if page[i].TurnUsage == nil {
-			continue
-		}
-		usage := *page[i].TurnUsage
-		if usage.CacheHitTokens != nil {
-			value := *usage.CacheHitTokens
-			usage.CacheHitTokens = &value
-		}
-		if usage.CacheMissTokens != nil {
-			value := *usage.CacheMissTokens
-			usage.CacheMissTokens = &value
-		}
-		page[i].TurnUsage = &usage
-	}
-	return page
 }
 
 // Submit starts a turn on the bridge-owned runtime. It intentionally returns
