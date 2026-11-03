@@ -7,6 +7,15 @@ use serde::Deserialize;
 use serde_json::json;
 use std::io::{self, BufRead, Write};
 
+fn encode_legacy_reply(reply: &mut serde_json::Value, limit: usize) -> serde_json::Result<Vec<u8>> {
+    let encoded = serde_json::to_vec(reply)?;
+    if encoded.len() <= limit || reply.get("preview").is_none() {
+        return Ok(encoded);
+    }
+    reply.as_object_mut().unwrap().remove("preview");
+    serde_json::to_vec(reply)
+}
+
 #[derive(Deserialize)]
 struct Fixture {
     mime_type: String,
@@ -41,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(thumbnail) = thumbnail {
             reply["preview"] = serde_json::to_value(thumbnail)?;
         }
-        output.write_all(&preview::encode_reply(&mut reply, 15 * 1024 * 1024)?)?;
+        output.write_all(&encode_legacy_reply(&mut reply, 15 * 1024 * 1024)?)?;
         output.write_all(b"\n")?;
         output.flush()?;
     }

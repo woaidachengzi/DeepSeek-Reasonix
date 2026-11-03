@@ -359,6 +359,113 @@ fn cancellation_before_read_does_zero_work_and_pending_events_or_resync_do_not_e
     assert_eq!(emissions, 0);
 }
 
+fn large_frame(sequence: u64, protocol: u64) -> Vec<u8> {
+    format!(
+        "data: {}\n",
+        serde_json::json!({"protocolVersion":protocol,"sequence":sequence,"eventKind":"tool_result",
+            "sessionId":"owned","payload":{"kind":"tool_result","text":"x".repeat(1 << 20)}})
+    )
+    .into_bytes()
+}
+
+#[test]
+fn ordinary_lines_reuse_one_cleared_bounded_buffer() {
+    let mut bytes = frame(1, "text");
+    bytes.extend(b"\nid: 2\nevent: text\n");
+    bytes.extend(frame(2, "text"));
+    let mut reader = BufReader::with_capacity(7, Cursor::new(bytes));
+    let mut cursor = EventCursor::new(0);
+    assert_eq!(delivered(cursor.next(&mut reader)).sequence, 1);
+    let pointer = cursor.line.as_ptr();
+    let capacity = cursor.line.capacity();
+    assert!(capacity > 0 && capacity <= MAX_RETAINED_LINE_BYTES);
+    assert!(cursor.line.is_empty());
+    for _ in 0..3 {
+        assert!(matches!(cursor.next(&mut reader), EventRead::Ignored));
+        assert_eq!(cursor.line.as_ptr(), pointer);
+        assert_eq!(cursor.line.capacity(), capacity);
+        assert!(cursor.line.is_empty());
+    }
+    assert_eq!(delivered(cursor.next(&mut reader)).sequence, 2);
+    assert_eq!(cursor.line.as_ptr(), pointer);
+    assert_eq!(cursor.line.capacity(), capacity);
+    assert!(cursor.line.is_empty());
+    assert!(matches!(cursor.next(&mut reader), EventRead::Reconnect));
+    assert!(cursor.line.is_empty());
+}
+
+#[test]
+fn exceptional_frame_buffers_are_released_after_every_admission_result() {
+    for (after, sequence, protocol) in [(0, 1, 1), (1, 1, 1), (0, 2, 1), (0, 1, 99)] {
+        let mut cursor = EventCursor::new(after);
+        let read = cursor.next(&mut BufReader::with_capacity(
+            4096,
+            Cursor::new(large_frame(sequence, protocol)),
+        ));
+        match (after, sequence, protocol) {
+            (0, 1, 1) => assert_eq!(
+                delivered(read).payload["text"].as_str().unwrap().len(),
+                1 << 20
+            ),
+            (0, 2, 1) => assert!(matches!(read, EventRead::ResyncRequired)),
+            _ => assert!(matches!(read, EventRead::Ignored)),
+        }
+        assert_eq!(cursor.line.capacity(), 0);
+        assert!(cursor.line.is_empty());
+    }
+    let mut bytes = large_frame(1, 1);
+    bytes.extend(frame(2, "text"));
+    let mut reader = Cursor::new(bytes);
+    let mut cursor = EventCursor::new(0);
+    assert_eq!(delivered(cursor.next(&mut reader)).sequence, 1);
+    assert_eq!(cursor.line.capacity(), 0);
+    assert_eq!(delivered(cursor.next(&mut reader)).sequence, 2);
+    assert!(cursor.line.capacity() <= MAX_RETAINED_LINE_BYTES);
+}
+
+#[test]
+fn failed_partial_lines_and_cancelled_large_reads_do_not_pin_large_buffers() {
+    for (suffix, limit) in [
+        (b"{broken}\n".as_slice(), MAX_EVENT_LINE_BYTES),
+        (b"".as_slice(), MAX_EVENT_LINE_BYTES),
+        (b"\n".as_slice(), 128 << 10),
+    ] {
+        let mut bytes = b"data: ".to_vec();
+        bytes.extend(vec![b' '; 150 << 10]);
+        bytes.extend(suffix);
+        let mut cursor = EventCursor::new(7);
+        let read = cursor.next_with_limit(
+            &mut BufReader::with_capacity(4096, Cursor::new(bytes)),
+            limit,
+        );
+        if suffix.is_empty() {
+            assert!(matches!(read, EventRead::Reconnect));
+        } else {
+            assert!(matches!(read, EventRead::ResyncRequired));
+        }
+        assert_eq!(cursor.after_sequence(), 7);
+        assert_eq!(cursor.line.capacity(), 0);
+    }
+    static CHUNK: [u8; 64 << 10] = [b'x'; 64 << 10];
+    let stop = std::cell::Cell::new(false);
+    let mut body = CancellingDrip {
+        chunks: vec![&CHUNK],
+        chunk: 0,
+        offset: 0,
+        fills: 0,
+        cancelled: &stop,
+    };
+    let mut cursor = EventCursor::new(7);
+    assert!(matches!(
+        cursor.next_cancellable(&mut body, &|| stop.get()),
+        EventRead::Stopped
+    ));
+    assert_eq!(body.fills, 3);
+    assert_eq!(cursor.after_sequence(), 7);
+    assert!(!cursor.needs_snapshot);
+    assert_eq!(cursor.line.capacity(), 0);
+}
+
 #[test]
 fn already_cancelled_connection_never_connects_or_reads_headers() {
     use std::net::TcpListener;

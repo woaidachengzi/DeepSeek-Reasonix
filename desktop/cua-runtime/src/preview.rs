@@ -24,6 +24,7 @@ pub struct Preview {
 
 // An optional display improvement must not push a completed action over the
 // existing transport cap. Remove it and serialize the original envelope first.
+#[cfg(test)]
 pub fn encode_reply(reply: &mut serde_json::Value, limit: usize) -> serde_json::Result<Vec<u8>> {
     let encoded = serde_json::to_vec(reply)?;
     if encoded.len() <= limit || reply.get("preview").is_none() {

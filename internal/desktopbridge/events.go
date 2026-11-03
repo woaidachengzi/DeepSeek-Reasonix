@@ -35,11 +35,12 @@ func (s *EventStream) Sink(sessionID string) event.Sink {
 		if !ok {
 			return
 		}
-		payload, err := json.Marshal(eventwire.ToWire(input))
+		wire := eventwire.ToWire(input)
+		payload, err := json.Marshal(wire)
 		if err != nil {
 			return
 		}
-		s.publish(Event{EventKind: kind, SessionID: sessionID, Payload: payload})
+		s.publishLive(Event{EventKind: kind, SessionID: sessionID, Payload: payload}, liveUpdateFromWire(wire))
 	})
 }
 
@@ -68,10 +69,14 @@ func (s *EventStream) LatestSequence() uint64 {
 }
 
 func (s *EventStream) publish(input Event) {
+	s.publishLive(input, liveUpdateFromPayload(input))
+}
+
+func (s *EventStream) publishLive(input Event, update liveUpdate) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	published := s.ledger.Append(input)
-	s.advanceLive(published)
+	s.advanceLive(published, update)
 	for subscriber := range s.subscribers {
 		select {
 		case subscriber <- published:

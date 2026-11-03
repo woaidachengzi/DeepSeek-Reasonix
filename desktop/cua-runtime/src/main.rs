@@ -4,12 +4,12 @@ mod identity;
 #[cfg(test)]
 mod linux_region_tests;
 mod preview;
+mod reply;
 mod request;
 use cua_driver_sdk::{
     ConfiguredDriverOptions, CuaDriver, RuntimeAuthorizationOptions, SessionPermissionMode,
     TrustedSessionOptions,
 };
-use serde_json::{json, Value};
 use std::io::{self, BufRead, Read, Write};
 use std::sync::Arc;
 const PROTOCOL: u32 = 1;
@@ -17,6 +17,7 @@ const SOURCE_REVISION: &str = env!("REASONIX_CUA_SOURCE_REVISION");
 const SOURCE_FINGERPRINT: &str = env!("REASONIX_CUA_SOURCE_FINGERPRINT");
 // Go's JSON encoder can escape a 16 KiB text field into 96 KiB on the wire.
 const MAX_REQUEST: usize = 128 * 1024;
+const MAX_REPLY: usize = 15 * 1024 * 1024;
 
 fn create_driver(
 ) -> Result<(Arc<CuaDriver>, Arc<browser::BrowserConsent>), cua_driver_sdk::DriverError> {
@@ -84,10 +85,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             bindings.check(&envelope)?;
             Ok(plan)
         });
-        let mut reply = match plan {
-            Err(error) => {
-                json!({"protocol":PROTOCOL,"id":sequence,"driver":"cua","version":version,"is_error":true,"completion":"not_started","error_code":"reasonix_target_refused","error":error,"result":{},"images":[]})
-            }
+        let context = reply::Context {
+            protocol: PROTOCOL,
+            id: sequence,
+            version: &version,
+            source_revision: SOURCE_REVISION,
+            source_fingerprint: SOURCE_FINGERPRINT,
+        };
+        let encoded = match plan {
+            Err(error) => reply::Failure::refused(context, &error).encode()?,
             Ok((name, args)) => {
                 consent.arm(&envelope);
                 let result = if envelope.request.is_browser() {
@@ -110,30 +116,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             None
                         };
-                        let structured = result
-                            .structured_json
-                            .as_deref()
-                            .and_then(|v| serde_json::from_str::<Value>(v).ok())
-                            .unwrap_or(Value::Null);
+                        let structured = reply::structured(result.structured_json.as_deref());
                         bindings.record(&envelope, &structured);
-                        let refused = structured["status"] == "refused"
-                            || result.action.as_ref().is_some_and(|action| {
-                                serde_json::to_value(action).is_ok_and(|v| v["effect"] == "refused")
-                            });
-                        json!({"protocol":PROTOCOL,"id":sequence,"driver":"cua","version":version,"result":structured,"text":result.text,
-                        "images":result.images.iter().map(|i|json!({"mime_type":i.mime_type,"data_base64":i.data_base64})).collect::<Vec<_>>(),
-                        "action":result.action,"is_error":result.is_error || refused,"error_code":result.error_code,"preview":preview})
+                        let action = result
+                            .action
+                            .as_ref()
+                            .map(serde_json::to_value)
+                            .transpose()?;
+                        let preview = preview.as_ref().map(serde_json::to_value).transpose()?;
+                        let mut reply = reply::Success::new(
+                            context,
+                            reply::SuccessData {
+                                result: &structured,
+                                text: &result.text,
+                                images: reply::Images(result.images.iter().map(|image| {
+                                    reply::Image {
+                                        data_base64: &image.data_base64,
+                                        mime_type: &image.mime_type,
+                                    }
+                                })),
+                                action: action.as_ref(),
+                                is_error: result.is_error
+                                    || reply::refused(&structured, action.as_ref()),
+                                error_code: result.error_code.as_deref(),
+                                preview: preview.as_ref(),
+                            },
+                        );
+                        reply.encode(MAX_REPLY)?
                     }
                     Err(error) => {
-                        json!({"protocol":PROTOCOL,"id":sequence,"driver":"cua","version":version,"is_error":true,"completion":"unknown","error_code":"reasonix_driver_error","error":error.to_string(),"result":{},"images":[]})
+                        reply::Failure::driver_error(context, &error.to_string()).encode()?
                     }
                 }
             }
         };
-        reply["source_revision"] = json!(SOURCE_REVISION);
-        reply["source_fingerprint"] = json!(SOURCE_FINGERPRINT);
-        let encoded = preview::encode_reply(&mut reply, 15 * 1024 * 1024)?;
-        if encoded.len() > 15 * 1024 * 1024 {
+        if encoded.len() > MAX_REPLY {
             break;
         }
         stdout.write_all(&encoded)?;

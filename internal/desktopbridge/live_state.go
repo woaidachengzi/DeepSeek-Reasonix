@@ -1,7 +1,6 @@
 package desktopbridge
 
 import (
-	"encoding/json"
 	"strings"
 	"unicode/utf8"
 )
@@ -58,7 +57,7 @@ func (s *EventStream) LiveSnapshot(id string) (LiveState, uint64) {
 
 // Caller holds s.mu. At most one in-flight model response is retained: text
 // completed before a tool dispatch already belongs to authoritative history.
-func (s *EventStream) advanceLive(published Event) {
+func (s *EventStream) advanceLive(published Event, update liveUpdate) {
 	checkpoint := s.live[published.SessionID]
 	if published.EventKind == "turn_started" {
 		if checkpoint == nil && len(s.live) >= liveStateLimit {
@@ -92,15 +91,11 @@ func (s *EventStream) advanceLive(published Event) {
 	case "reasoning":
 		checkpoint.view.Progress.Phase = "thinking"
 	case "text":
-		var payload struct {
-			Kind string `json:"kind"`
-			Text string `json:"text"`
-		}
-		if json.Unmarshal(published.Payload, &payload) != nil || payload.Kind != "text" {
+		if !update.valid {
 			return
 		}
 		remaining := LiveAnswerRuneLimit - checkpoint.runes
-		delta := payload.Text
+		delta := update.text
 		if utf8.RuneCountInString(delta) > remaining {
 			delta = string([]rune(delta)[:remaining])
 			checkpoint.view.Truncated = true
@@ -117,30 +112,14 @@ func (s *EventStream) advanceLive(published Event) {
 		checkpoint.view.Answer.Streaming = true
 		checkpoint.view.Progress.Phase = "answering"
 	case "tool_dispatch", "tool_result":
-		var payload struct {
-			Tool *struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
-				Err  string `json:"err"`
-			} `json:"tool"`
-		}
-		if json.Unmarshal(published.Payload, &payload) != nil || payload.Tool == nil || payload.Tool.ID == "" {
+		if !update.valid {
 			return
 		}
-		tool := payload.Tool
-		state := "running"
 		phase := "tool"
 		if published.EventKind == "tool_result" {
-			state = "done"
 			phase = "thinking"
-			if tool.Err != "" {
-				state = "failed"
-			}
 		}
-		item := LiveTool{ID: clipLiveText(tool.ID, 256), Name: clipLiveText(tool.Name, 120), State: state}
-		if strings.TrimSpace(item.Name) == "" {
-			item.Name = "工具"
-		}
+		item := update.tool
 		found := false
 		for i, current := range checkpoint.view.Progress.Tools {
 			if current.ID == item.ID {

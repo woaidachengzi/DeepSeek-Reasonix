@@ -7,6 +7,8 @@ const MAX_EVENT_LINE_BYTES: usize = MAX_BRIDGE_RESPONSE_BODY_BYTES + 8;
 // Match the existing selected-session remote SSE header budgets.
 const MAX_HEADER_LINE_BYTES: usize = 8 << 10;
 const MAX_HEADER_BYTES: usize = 64 << 10;
+// Keep ordinary frames warm without pinning an exceptional tool-result body.
+const MAX_RETAINED_LINE_BYTES: usize = 64 << 10;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum EventStreamError {
@@ -24,15 +26,18 @@ enum LineError {
 
 #[cfg(test)]
 fn line(reader: &mut impl BufRead, limit: usize) -> Result<Option<Vec<u8>>, LineError> {
-    line_cancellable(reader, limit, &|| false)
+    let mut scratch = Vec::new();
+    line_cancellable(reader, limit, &|| false, &mut scratch)
+        .map(|present| present.then_some(scratch))
 }
 
 fn line_cancellable(
     reader: &mut impl BufRead,
     limit: usize,
     cancelled: &impl Fn() -> bool,
-) -> Result<Option<Vec<u8>>, LineError> {
-    let mut result = Vec::new();
+    result: &mut Vec<u8>,
+) -> Result<bool, LineError> {
+    result.clear();
     loop {
         if cancelled() {
             return Err(LineError::Cancelled);
@@ -44,7 +49,7 @@ fn line_cancellable(
         let bytes = available.map_err(|_| LineError::Unavailable)?;
         if bytes.is_empty() {
             return if result.is_empty() {
-                Ok(None)
+                Ok(false)
             } else {
                 Err(LineError::Unavailable)
             };
@@ -65,7 +70,7 @@ fn line_cancellable(
             return Err(LineError::Cancelled);
         }
         if end.is_some() {
-            return Ok(Some(result));
+            return Ok(true);
         }
     }
 }
@@ -74,9 +79,15 @@ fn header_line(
     reader: &mut impl BufRead,
     remaining: usize,
     cancelled: &impl Fn() -> bool,
-) -> Result<Vec<u8>, EventStreamError> {
-    match line_cancellable(reader, MAX_HEADER_LINE_BYTES.min(remaining), cancelled) {
-        Ok(Some(value)) => Ok(value),
+    scratch: &mut Vec<u8>,
+) -> Result<(), EventStreamError> {
+    match line_cancellable(
+        reader,
+        MAX_HEADER_LINE_BYTES.min(remaining),
+        cancelled,
+        scratch,
+    ) {
+        Ok(true) => Ok(()),
         Err(LineError::Limit) => Err(EventStreamError::ResyncRequired),
         Err(LineError::Cancelled) => Err(EventStreamError::Cancelled),
         _ => Err(EventStreamError::Unavailable),
@@ -92,8 +103,10 @@ pub(super) fn read_headers_cancellable(
     reader: &mut impl BufRead,
     cancelled: &impl Fn() -> bool,
 ) -> Result<(), EventStreamError> {
-    let status = header_line(reader, MAX_HEADER_BYTES, cancelled)?;
-    let status_text = std::str::from_utf8(&status).map_err(|_| EventStreamError::Unavailable)?;
+    let mut scratch = Vec::new();
+    header_line(reader, MAX_HEADER_BYTES, cancelled, &mut scratch)?;
+    let status = &scratch;
+    let status_text = std::str::from_utf8(status).map_err(|_| EventStreamError::Unavailable)?;
     let mut words = status_text.split_whitespace();
     if !matches!(words.next(), Some("HTTP/1.0" | "HTTP/1.1")) {
         return Err(EventStreamError::Unavailable);
@@ -105,15 +118,16 @@ pub(super) fn read_headers_cancellable(
     }
     let mut total = status.len();
     loop {
-        let header = header_line(reader, MAX_HEADER_BYTES - total, cancelled)?;
+        header_line(reader, MAX_HEADER_BYTES - total, cancelled, &mut scratch)?;
+        let header = &scratch;
         total = total.saturating_add(header.len());
         if total > MAX_HEADER_BYTES {
             return Err(EventStreamError::ResyncRequired);
         }
-        if header == b"\r\n" || header == b"\n" {
+        if header.as_slice() == b"\r\n" || header.as_slice() == b"\n" {
             return Ok(());
         }
-        let header = std::str::from_utf8(&header).map_err(|_| EventStreamError::Unavailable)?;
+        let header = std::str::from_utf8(header).map_err(|_| EventStreamError::Unavailable)?;
         let (name, value) = header
             .split_once(':')
             .ok_or(EventStreamError::Unavailable)?;
@@ -148,6 +162,7 @@ impl EventRead {
 pub(super) struct EventCursor {
     after: u64,
     needs_snapshot: bool,
+    line: Vec<u8>,
 }
 
 impl EventCursor {
@@ -155,6 +170,7 @@ impl EventCursor {
         Self {
             after,
             needs_snapshot: false,
+            line: Vec::new(),
         }
     }
 
@@ -191,18 +207,36 @@ impl EventCursor {
         limit: usize,
         cancelled: &impl Fn() -> bool,
     ) -> EventRead {
+        let mut scratch = std::mem::take(&mut self.line);
+        let read = self.next_with_scratch(reader, limit, cancelled, &mut scratch);
+        self.line = if scratch.capacity() > MAX_RETAINED_LINE_BYTES {
+            Vec::new()
+        } else {
+            scratch.clear();
+            scratch
+        };
+        read
+    }
+
+    fn next_with_scratch(
+        &mut self,
+        reader: &mut impl BufRead,
+        limit: usize,
+        cancelled: &impl Fn() -> bool,
+        scratch: &mut Vec<u8>,
+    ) -> EventRead {
         if self.needs_snapshot || cancelled() {
             return EventRead::Stopped;
         }
-        let line = match line_cancellable(reader, limit, cancelled) {
-            Ok(Some(line)) => line,
+        match line_cancellable(reader, limit, cancelled, scratch) {
+            Ok(true) => {}
             Err(LineError::Limit) => return self.resync().if_active(cancelled),
             Err(LineError::Cancelled) => return EventRead::Stopped,
-            Ok(None) | Err(LineError::Unavailable) => {
+            Ok(false) | Err(LineError::Unavailable) => {
                 return EventRead::Reconnect.if_active(cancelled)
             }
-        };
-        let Some(data) = line.strip_prefix(b"data:") else {
+        }
+        let Some(data) = scratch.strip_prefix(b"data:") else {
             return EventRead::Ignored; // SSE comments, metadata and blank lines.
         };
         let data = data.strip_prefix(b" ").unwrap_or(data);
