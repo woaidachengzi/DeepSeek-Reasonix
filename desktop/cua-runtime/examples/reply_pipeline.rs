@@ -105,7 +105,7 @@ fn encode(fixture: &Fixture, id: u64, route: &str) -> serde_json::Result<Vec<u8>
             value.as_object_mut().unwrap().remove("preview");
             serde_json::to_vec(&value)
         }
-        "borrowed" => {
+        "borrowed" | "previous" => {
             let mut value = reply::Success::new(
                 context(id),
                 reply::SuccessData {
@@ -121,7 +121,14 @@ fn encode(fixture: &Fixture, id: u64, route: &str) -> serde_json::Result<Vec<u8>
                     preview: fixture.preview.as_ref(),
                 },
             );
-            value.encode(LIMIT)
+            if route == "previous" {
+                // Exact 0.1.73 normal-path encoding, for fixtures below the cap.
+                let encoded = serde_json::to_vec(&value)?;
+                assert!(encoded.len() <= LIMIT);
+                Ok(encoded)
+            } else {
+                value.encode(LIMIT)
+            }
         }
         _ => Err(<serde_json::Error as serde::ser::Error>::custom(
             "unknown reply route",

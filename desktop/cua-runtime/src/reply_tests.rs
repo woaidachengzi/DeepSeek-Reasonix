@@ -11,6 +11,30 @@ fn context() -> Context<'static> {
     }
 }
 
+#[test]
+fn capacity_hint_is_not_a_wire_limit_or_an_escaping_estimate() {
+    let image = "\"\\\n界".repeat(4096);
+    let result = json!({"large": "metadata".repeat(4096)});
+    let preview = json!({"data_base64":"preview".repeat(1024)});
+    for limit in [0, 1, 1024, 64 << 10, usize::MAX] {
+        let data = || SuccessData {
+            result: &result,
+            text: "escaped \"text\"",
+            images: Images(std::iter::once(Image {
+                data_base64: &image,
+                mime_type: "image/quoted\"type",
+            })),
+            action: None,
+            is_error: false,
+            error_code: None,
+            preview: Some(&preview),
+        };
+        let expected = legacy_success(context(), &data(), limit);
+        let mut reply = Success::new(context(), data());
+        assert_eq!(reply.encode(limit).unwrap(), expected);
+    }
+}
+
 // The original 0.1.72 Value construction and optional-preview cap fallback.
 fn legacy_success(
     context: Context<'_>,

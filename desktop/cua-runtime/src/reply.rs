@@ -20,6 +20,22 @@ pub struct Image<'a> {
 
 pub struct Images<I>(pub I);
 
+pub trait ImageBytes: Serialize {
+    fn image_bytes(&self) -> usize;
+}
+
+impl<'a, I> ImageBytes for Images<I>
+where
+    I: Clone + ExactSizeIterator<Item = Image<'a>>,
+{
+    fn image_bytes(&self) -> usize {
+        self.0.clone().fold(0usize, |size, image| {
+            size.saturating_add(image.data_base64.len())
+                .saturating_add(image.mime_type.len())
+        })
+    }
+}
+
 impl<'a, I> Serialize for Images<I>
 where
     I: Clone + ExactSizeIterator<Item = Image<'a>>,
@@ -79,16 +95,27 @@ impl<'a, I: Serialize> Success<'a, I> {
             version: context.version,
         }
     }
+}
 
-    // Removing even a null preview matches the original Value-based fallback.
-    // An oversized original reply remains oversized for the caller's cap check.
+impl<I: ImageBytes> Success<'_, I> {
     pub fn encode(&mut self, limit: usize) -> serde_json::Result<Vec<u8>> {
-        let encoded = serde_json::to_vec(&*self)?;
+        // A sizing hint only: escaped text and arbitrary structured data may
+        // still grow the buffer. Wire limits are checked against actual bytes.
+        let hint = self
+            .images
+            .image_bytes()
+            .saturating_add(self.text.len())
+            .saturating_add(1024);
+        let mut encoded = Vec::with_capacity(hint.min(limit.max(128)));
+        serde_json::to_writer(&mut encoded, &*self)?;
         if encoded.len() <= limit || self.preview.is_none() {
             return Ok(encoded);
         }
+        // Remove only optional preview, retaining the same allocated buffer.
         self.preview = None;
-        serde_json::to_vec(self)
+        encoded.clear();
+        serde_json::to_writer(&mut encoded, self)?;
+        Ok(encoded)
     }
 }
 

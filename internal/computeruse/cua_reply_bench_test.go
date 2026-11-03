@@ -29,7 +29,7 @@ func BenchmarkCuaReplyPipeline(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
-		for _, mode := range []string{"legacy", "borrowed"} {
+		for _, mode := range []string{"legacy", "previous", "borrowed"} {
 			b.Run(fmt.Sprintf("%dKiB/%s", size>>10, mode), func(b *testing.B) {
 				cmd := exec.Command(binary)
 				cmd.Env = cuaProcessEnvironment(runtime.GOOS)

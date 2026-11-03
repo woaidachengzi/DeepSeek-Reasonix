@@ -430,3 +430,44 @@ The 0.1.72 rollback and 0.1.73 release are archived under
 `desktop/tauri/target/releases.noindex/`, outside bundler cleanup. Completing
 these three measured slices does not remove the Go core or establish that all
 application performance work is finished.
+
+## Follow-up: reply buffer capacity, 0.1.74
+
+The borrowed envelope still grew its JSON output vector repeatedly. It now
+uses a saturating image/text byte estimate plus modest metadata allowance for
+initial capacity, capped by the supplied reply budget (with a small minimum).
+This is only an allocation hint: escaping and structured data can exceed it,
+and the original actual-byte checks remain authoritative. Preview removal
+clears and reuses the first output buffer instead of allocating another one.
+The complete original images and wire bytes remain unchanged.
+
+The same-byte oracle now also covers underestimated escaping, large structured
+metadata and budgets of zero/one byte. All 29 adapter tests and production
+clippy passed, including the existing real 15MiB boundaries. No SDK, dependency,
+approval, capture or provider behavior changed.
+
+Five alternating rounds compare the exact 0.1.73 normal-path `to_vec` encoding
+with the capacity implementation, using identical below-cap fixtures. Rust
+allocation counting is separate from latency timing. The persistent pipe adds
+Go decode and complete image/source validation, excluding SDK dispatch,
+capture, thumbnails and models. All samples and source hashes are in
+[`benchmark.json`](evidence/2026-11-03-reply-capacity/benchmark.json).
+
+| Base64 image body | Rust requested bytes, 0.1.73 → 0.1.74 | Isolated encoding | Complete warm pipe |
+| --- | ---: | ---: | ---: |
+| 64KiB | 0.198 → 0.067 MB | 0.0192 → 0.0173 ms | 0.123 → 0.119 ms |
+| 1MiB | 3.147 → 1.050 MB | 0.287 → 0.268 ms | 1.385 → 1.358 ms |
+| 8MiB | 25.167 → 8.390 MB | 2.180 → 2.182 ms | 15.477 → 15.773 ms |
+
+The main gain is about two-thirds fewer cumulative Rust allocation requests
+for these image bodies. Large-reply latency is effectively flat; no general
+pipeline or whole-app speedup is claimed. These counters are not peak RSS.
+Go decode allocation remains approximately unchanged.
+
+```sh
+python3 tools/tauri/bench-reply-capacity.py --output /tmp/reasonix-reply-capacity-bench
+```
+
+The protected 0.1.73 rollback and 0.1.74 package are stored outside bundler
+cleanup in `desktop/tauri/target/releases.noindex/`. Native package verification
+is recorded in the archived receipt; no native input or screenshot is used.
