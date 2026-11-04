@@ -234,11 +234,21 @@ export default function TranscriptWindow({
     const clientHeight = scrollElement?.clientHeight ?? nativeViewport.clientHeight;
     const domItems: Array<{ index: number; top: number }> = [];
     const blocks = Array.from(container?.querySelectorAll<HTMLElement>("[data-transcript-block-key]") ?? []);
-    const visible = blocks.filter(element => {
+    const mountedByIndex = new Map<string, { element: HTMLElement; rect: DOMRect }>();
+    let common: HTMLElement | undefined;
+    // This pass is read-only. Reuse each host's rect for visibility and size
+    // instead of querying and measuring it again for every painted item.
+    for (const element of blocks) {
       const rect = element.getBoundingClientRect();
-      return viewport && rect.bottom > viewport.top + 0.5 && rect.top < viewport.top + clientHeight;
-    });
-    const common = visible.find(element => materializedElements.current.has(element));
+      const index = element.dataset.index;
+      if (index !== undefined && element.classList.contains("transcript__window-item") && !mountedByIndex.has(index)) {
+        mountedByIndex.set(index, { element, rect });
+      }
+      if (!common && viewport && rect.bottom > viewport.top + 0.5
+        && rect.top < viewport.top + clientHeight && materializedElements.current.has(element)) {
+        common = element;
+      }
+    }
     const commonKey = common?.dataset.transcriptBlockKey;
     const commonItem = commonKey ? measuredItems.find(item => String(item.key) === commonKey) : undefined;
     // The committed prefix is independent of compositor progress. Rebuilding
@@ -253,16 +263,15 @@ export default function TranscriptWindow({
     const originAnchor: LogicalAnchor | undefined = committedVisible
       ? { kind: "block", blockKey: String(committedVisible.key), offsetPx: observedTop - (committedVisible.start + origin) }
       : undefined;
-    if (container) {
-      for (const item of measuredItems) {
-        const element = container.querySelector<HTMLElement>(`.transcript__window-item[data-index="${item.index}"]`);
-        if (!element) continue;
-        if (!materializedElements.current.has(element)) firstMeasurements.add(String(item.key));
-        const rect = element.getBoundingClientRect();
-        if (viewport) domItems.push({ index: item.index, top: rect.top - viewport.top });
-        const size = Math.max(64, rect.height || element.offsetHeight);
-        changes.push({ key: String(item.key), size });
-      }
+    for (const item of measuredItems) {
+      const mounted = mountedByIndex.get(String(item.index));
+      if (!mounted) continue;
+      const { element, rect } = mounted;
+      const key = String(item.key);
+      if (!materializedElements.current.has(element)) firstMeasurements.add(key);
+      if (viewport) domItems.push({ index: item.index, top: rect.top - viewport.top });
+      const size = Math.max(64, rect.height || element.offsetHeight);
+      changes.push({ key, size });
     }
     measurementLedger.stage(changes);
     // Input leases own intent and writer exclusion, not a second size queue.

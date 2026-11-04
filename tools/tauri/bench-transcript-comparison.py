@@ -13,6 +13,7 @@ SOURCES = [
     'desktop/frontend/src/components/TranscriptBlockView.tsx',
     'desktop/frontend/src/components/TranscriptWindow.tsx',
     'desktop/frontend/src/lib/transcriptMeasurementLedger.ts',
+    'desktop/frontend/src/lib/useTranscriptKernel.ts',
     'tools/tauri/bench-transcript-native.py', 'tools/tauri/bench-transcript-native.swift',
     'tools/tauri/bench-transcript-native.js', 'tools/tauri/bench-transcript-comparison.py',
 ]

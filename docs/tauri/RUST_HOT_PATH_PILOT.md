@@ -826,3 +826,36 @@ improves streaming computation and does not complete cold-history navigation,
 all renderer profiling, or the full Go-to-Rust migration. 0.1.78 packages use a
 clean reviewed commit and keep the archived 0.1.77 rollback outside bundler
 cleanup.
+
+## Follow-up: reuse mounted viewport measurements
+
+A Chrome CPU profile of the 0.1.78 synthetic 1K-turn question navigator
+showed repeated layout reads in the window's measurement effect and in the
+Kernel hook. The window now samples mounted block rectangles once for both
+visibility and size, then matches them to the painted items in prefix order.
+Bottom-distance rendering reads only the scroller dimensions. Anchor and
+coverage work still reads fresh block coordinates, and publication still
+rechecks native scroll progress before admitting measurements. Scroll writes,
+generation, mount budget, and geometry publication rules stay the same.
+
+In one separate instrumented Chrome replay, block rectangle reads across
+fixture setup and nine jumps went from 11,233 to 6,622. Instrumentation also
+counts the test probe's reads; those samples were excluded from timing.
+Five serial alternating Chrome rounds (warm-up pair excluded) showed median
+main-thread script duration of 523.3 → 519.6 ms and total task duration of
+944.9 → 904.0 ms. Both include fixture setup; neither measures model speed.
+
+Five serial alternating native WKWebView rounds compared the production
+0.1.78 assets from `fde7a5d2b` with the candidate using
+`tools/tauri/bench-transcript-comparison.py`. Each build completed 45 jumps
+and 430 sampled frames, with zero empty viewports and at most 40 mounted
+blocks. Median landing was 60 → 58 ms, median run rAF P95 was 36 → 35 ms,
+and intervals above 50 ms were 20 → 21. The worst landing was 70 → 96 ms.
+The native results do not establish a consistent latency or long-frame
+improvement. The tests use synthetic history and do not measure real
+history I/O, model latency, Tauri IPC, or native paint time.
+
+Production build, test typechecking, deterministic transcript tests, and the
+Chrome selection, scroll, and composer regressions passed. The separate
+cross-browser reader replay did not start because its pinned Playwright
+browser binaries were missing; the native WKWebView comparison ran separately.

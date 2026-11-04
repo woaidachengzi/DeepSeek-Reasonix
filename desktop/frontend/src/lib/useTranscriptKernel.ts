@@ -18,6 +18,14 @@ const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home
 // native stream has actually gone idle.
 const NATIVE_GESTURE_IDLE_MS = 320;
 export const TranscriptKernelClockContext = createContext<TranscriptKernelClock | undefined>(undefined);
+function readViewportDimensions(element: HTMLElement) {
+  const scrollTop = element.scrollTop;
+  const scrollHeight = element.scrollHeight;
+  const clientHeight = element.clientHeight;
+  if (!Number.isFinite(scrollTop) || !Number.isFinite(scrollHeight) || !Number.isFinite(clientHeight)) return null;
+  return { scrollTop, scrollHeight, clientHeight };
+}
+
 function blockTop(element: HTMLElement, key: string): number | undefined {
   const node = Array.from(element.querySelectorAll<HTMLElement>("[data-transcript-block-key]"))
     .find((candidate) => candidate.dataset.transcriptBlockKey === key);
@@ -25,22 +33,25 @@ function blockTop(element: HTMLElement, key: string): number | undefined {
   return node.getBoundingClientRect().top - element.getBoundingClientRect().top + element.scrollTop;
 }
 
-function readSnapshot(element: HTMLElement): TranscriptViewportSnapshot {
+function readSnapshot(element: HTMLElement): TranscriptViewportSnapshot | null {
+  const dimensions = readViewportDimensions(element);
+  if (!dimensions) return null;
   const viewport = element.getBoundingClientRect();
-  const top = element.scrollTop;
-  return {
-    scrollTop: top,
-    scrollHeight: element.scrollHeight,
-    clientHeight: element.clientHeight,
-    visibleBlocks: Array.from(element.querySelectorAll<HTMLElement>("[data-transcript-block-key]"))
-      .map((node) => {
-        const rect = node.getBoundingClientRect();
-        const contentTop = rect.top - viewport.top + top;
-        return { key: node.dataset.transcriptBlockKey ?? "", top: contentTop, bottom: contentTop + rect.height };
-      })
-      .filter((block) => block.key && block.bottom >= top && block.top <= top + element.clientHeight)
-      .sort((left, right) => left.top - right.top),
-  };
+  // Read the native offset after the viewport rect, as anchor sampling does
+  // today. Reuse the fixed viewport size across the mounted nodes.
+  const scrollTop = element.scrollTop;
+  const visibleBlocks: TranscriptViewportSnapshot["visibleBlocks"][number][] = [];
+  for (const node of element.querySelectorAll<HTMLElement>("[data-transcript-block-key]")) {
+    const rect = node.getBoundingClientRect();
+    const key = node.dataset.transcriptBlockKey;
+    const top = rect.top - viewport.top + scrollTop;
+    const bottom = top + rect.height;
+    if (key && bottom >= scrollTop && top <= scrollTop + dimensions.clientHeight) {
+      visibleBlocks.push({ key, top, bottom });
+    }
+  }
+  visibleBlocks.sort((left, right) => left.top - right.top);
+  return { ...dimensions, scrollTop, visibleBlocks };
 }
 
 export function useTranscriptKernel({
@@ -79,8 +90,7 @@ export function useTranscriptKernel({
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   const snapshot = useCallback(() => {
     const element = scrollRef.current;
-    if (!element || ![element.scrollTop, element.scrollHeight, element.clientHeight].every(Number.isFinite)) return null;
-    return readSnapshot(element);
+    return element ? readSnapshot(element) : null;
   }, []);
 
   useLayoutEffect(() => {
@@ -308,7 +318,9 @@ export function useTranscriptKernel({
     return accepted;
   }, [kernel, refresh]);
 
-  const geometry = snapshot();
+  // Render only consumes bottom distance. Anchor and coverage transactions
+  // still take a fresh full snapshot when they actually need mounted rects.
+  const geometry = scrollRef.current ? readViewportDimensions(scrollRef.current) : null;
   const isAtBottom = geometry
     ? geometry.scrollHeight - geometry.clientHeight - geometry.scrollTop <= 4
     : kernel.intent === "tail";
