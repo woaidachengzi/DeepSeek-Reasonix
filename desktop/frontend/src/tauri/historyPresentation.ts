@@ -28,7 +28,9 @@ export function groupTauriHistory(
     if (progress.length > 0 || (final && (final.message.workDurationMs ?? 0) > 0)) {
       result.push({
         kind: "progress",
-        anchorIndex: assistants[0].index,
+        // A page can start halfway through an assistant run. Anchor its
+        // progress header to the end so prepending that run keeps its identity.
+        anchorIndex: assistants[assistants.length - 1].index,
         entries: progress,
         durationMs: final?.message.workDurationMs || progress[progress.length - 1]?.message.workDurationMs || 0,
         active,

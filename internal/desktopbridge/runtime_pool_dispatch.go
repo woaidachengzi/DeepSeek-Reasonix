@@ -246,6 +246,14 @@ func (p *RuntimePool) History(sessionID string) (HistoryView, error) {
 	return slot.History(sessionID)
 }
 
+func (p *RuntimePool) HistoryBefore(sessionID string, before int) (HistoryView, error) {
+	slot, err := p.slot(sessionID)
+	if err != nil {
+		return HistoryView{}, err
+	}
+	return slot.HistoryBefore(sessionID, before)
+}
+
 func (p *RuntimePool) Submit(ctx context.Context, sessionID, input string) (SessionView, error) {
 	slot, err := p.slot(sessionID)
 	if err != nil {

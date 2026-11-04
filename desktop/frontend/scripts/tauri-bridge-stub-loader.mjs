@@ -513,13 +513,16 @@ export function tauriSessionBalance(sessionId) {
   return Promise.resolve({ protocolVersion: 1, balance: null });
 }
 
-export function tauriBridgeHistory(sessionId) {
-  record("bridge_session_history", { sessionId });
+export function tauriBridgeHistory(sessionId, beforeIndex) {
+  record("bridge_session_history", beforeIndex === undefined ? { sessionId } : { sessionId, beforeIndex });
   if (globalThis.__historyError) return Promise.reject(new Error(globalThis.__historyError));
   const messages = globalThis.__historyBySession?.[sessionId] ?? globalThis.__tauriHistoryMessages ?? [];
   const workspaceRoot = (globalThis.__workbenchSessions ?? []).find(item => item.sessionId === sessionId)?.workspaceRoot;
-  const result = { sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", workspaceRoot }, messages, startIndex: 0, totalMessages: messages.length };
-  return globalThis.__historyGate ? globalThis.__historyGate.then(() => result) : Promise.resolve(result);
+  const endIndex = beforeIndex ?? messages.length;
+  const startIndex = Math.max(0, endIndex - (globalThis.__historyPageSize ?? messages.length));
+  const result = { sequence: 0, session: { id: sessionId, path: "/tmp/" + sessionId + ".jsonl", state: "idle", workspaceRoot }, messages: messages.slice(startIndex, endIndex), startIndex, totalMessages: messages.length };
+  const gate = beforeIndex === undefined ? globalThis.__historyGate : globalThis.__olderHistoryGate;
+  return gate ? gate.then(() => result) : Promise.resolve(result);
 }
 
 export function steerTauriBridge(sessionId, input) {

@@ -18,6 +18,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1781,7 +1782,27 @@ func (b *bridgeServer) applySessionSettings(w http.ResponseWriter, r *http.Reque
 }
 
 func (b *bridgeServer) sessionHistory(w http.ResponseWriter, r *http.Request) {
-	history, err := b.runtimes.History(r.PathValue("id"))
+	query, queryErr := url.ParseQuery(r.URL.RawQuery)
+	if queryErr != nil {
+		writeProtocolError(w, http.StatusBadRequest, "invalid_request", "invalid session history query")
+		return
+	}
+	var history desktopbridge.HistoryView
+	var err error
+	if values, ok := query["before"]; ok {
+		if len(values) != 1 {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "before must be a positive visible history index")
+			return
+		}
+		before, parseErr := strconv.Atoi(values[0])
+		if parseErr != nil || before <= 0 {
+			writeProtocolError(w, http.StatusBadRequest, "invalid_request", "before must be a positive visible history index")
+			return
+		}
+		history, err = b.runtimes.HistoryBefore(r.PathValue("id"), before)
+	} else {
+		history, err = b.runtimes.History(r.PathValue("id"))
+	}
 	if err != nil {
 		b.writeRuntimeError(w, err, "unable to read desktop bridge session history")
 		return

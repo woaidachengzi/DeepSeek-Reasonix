@@ -33,6 +33,7 @@ import { CommandPalette, type PaletteItem } from "../components/CommandPalette";
 import { ShortcutsCheatsheet, type ShortcutCheatsheetItem } from "../components/ShortcutsCheatsheet";
 import { QuestionJumpBar } from "../components/QuestionJumpBar";
 import { useTranscriptKernel } from "../lib/useTranscriptKernel";
+import type { LogicalAnchor } from "../lib/transcriptKernel";
 import { TauriLiveAnswer } from "./TauriLiveAnswer";
 import { TauriLiveProgress } from "./TauriLiveProgress";
 import { TauriComputerUsePreview } from "./TauriComputerUsePreview";
@@ -548,6 +549,17 @@ export function TauriSessionPreview() {
   const [observedUsage, setObservedUsage] = useState<TauriObservedUsage | null>(null);
   const [sessionMetrics, setSessionMetrics] = useState<{ sessionId: string; metrics: TauriSessionMetrics } | null>(null);
   const [history, setHistory] = useState<TauriBridgeHistory | null>(null);
+  const committedHistory = useRef<TauriBridgeHistory | null>(null);
+  const olderHistoryRequest = useRef<{ source: TauriBridgeHistory } | null>(null);
+  const prependedHistory = useRef<TauriBridgeHistory | null>(null);
+  const olderLayoutAnchor = useRef<{
+    history: TauriBridgeHistory; generation: number; interaction: number; anchor: LogicalAnchor;
+  } | null>(null);
+  const [olderHistoryLoading, setOlderHistoryLoading] = useState<TauriBridgeHistory | null>(null);
+  const [readyOlderHistory, setReadyOlderHistory] = useState<{
+    source: TauriBridgeHistory; merged: TauriBridgeHistory; generation: number; epoch: number;
+  } | null>(null);
+  const [olderHistoryError, setOlderHistoryError] = useState<{ source: TauriBridgeHistory; message: string } | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
   const [liveAnswer, setLiveAnswer] = useState(EMPTY_LIVE_ANSWER);
@@ -686,20 +698,37 @@ export function TauriSessionPreview() {
     initialPosition: "tail",
     geometryRevision: `${session?.id}:${history?.sequence}:${history?.startIndex}:${history?.messages.length}:${liveText.length}:${pendingUserMessageTime}:${session?.state}:${progressMode}`,
   });
-  const { scrollRef: conversationRef, scrollElement, kernel: transcriptKernel, commitViewportGeometry } = viewport;
+  const { scrollRef: conversationRef, scrollElement, kernel: transcriptKernel, commitViewportGeometry, beginAnchorRestore } = viewport;
   const prepareHistoryViewport = useCallback(() => commitViewportGeometry(undefined, true), [commitViewportGeometry]);
-  useLayoutEffect(() => { commitViewportGeometry(); }, [history, liveProgress, pendingUserMessage, commitViewportGeometry]);
+  useLayoutEffect(() => {
+    committedHistory.current = history;
+    const prepended = history !== null && prependedHistory.current === history;
+    prependedHistory.current = null;
+    commitViewportGeometry(undefined, prepended);
+  }, [history, liveProgress, pendingUserMessage, commitViewportGeometry]);
   useLayoutEffect(() => {
     if (!scrollElement || typeof ResizeObserver === "undefined") return;
     const generation = transcriptKernel.generation;
     let active = true;
     const observer = new ResizeObserver(() => {
-      if (active && generation === transcriptKernel.generation) commitViewportGeometry();
+      if (!active || generation !== transcriptKernel.generation) return;
+      const pending = olderLayoutAnchor.current;
+      if (pending && pending.history === committedHistory.current && pending.generation === generation &&
+          pending.interaction === transcriptKernel.interactionRevision && !transcriptKernel.userGestureActive) {
+        // Worker Markdown can replace its plain fallback after the initial
+        // prepend. Correct that measured reflow through the same writer.
+        beginAnchorRestore(pending.anchor);
+        commitViewportGeometry(undefined, true);
+        if (!transcriptElement?.querySelector("[data-transcript-geometry-pending]")) olderLayoutAnchor.current = null;
+        return;
+      }
+      olderLayoutAnchor.current = null;
+      commitViewportGeometry();
     });
     observer.observe(scrollElement);
     if (transcriptElement) observer.observe(transcriptElement);
     return () => { active = false; observer.disconnect(); };
-  }, [scrollElement, transcriptElement, session?.id, transcriptKernel, commitViewportGeometry]);
+  }, [scrollElement, transcriptElement, session?.id, transcriptKernel, beginAnchorRestore, commitViewportGeometry]);
   // Drag-and-drop state
   const [dragging, setDragging] = useState(false);
   const pendingSessionDeleteIDs = useMemo(() => new Set(pendingSessionDeletes.map(item => item.id)), [pendingSessionDeletes]);
@@ -901,8 +930,73 @@ export function TauriSessionPreview() {
   }, [questions]);
 
   function jumpToQuestion(question: QuestionAnchor) {
+    olderLayoutAnchor.current = null;
     if (viewport.jumpToBlock(question.id)) setActiveQuestion(question.turn);
   }
+
+  const { snapshot: snapshotViewport, beginStructural } = viewport;
+  const readerGestureActive = transcriptKernel.userGestureActive;
+  useLayoutEffect(() => {
+    if (!readyOlderHistory) return;
+    const { source, merged, generation, epoch } = readyOlderHistory;
+    if (source !== history || generation !== transcriptKernel.generation || epoch !== turnEpochRef.current) {
+      setReadyOlderHistory(null);
+      return;
+    }
+    // A fast response can arrive before the pointer gesture or wheel lease
+    // ends. Capture the latest anchor once the reader releases ownership.
+    if (readerGestureActive) return;
+    const snapshot = snapshotViewport();
+    const anchor = snapshot ? transcriptKernel.capture(snapshot) : transcriptKernel.anchor;
+    if (!beginStructural("prepend", anchor)) {
+      setReadyOlderHistory(null);
+      setOlderHistoryError({ source, message: locale === "en" ? "Try again after the jump finishes." : "请在跳转完成后重试。" });
+      return;
+    }
+    prependedHistory.current = merged;
+    olderLayoutAnchor.current = anchor.kind === "block"
+      ? { history: merged, generation, interaction: transcriptKernel.interactionRevision, anchor }
+      : null;
+    setHistory(merged);
+    setReadyOlderHistory(null);
+  }, [beginStructural, history, locale, readerGestureActive, readyOlderHistory, snapshotViewport, transcriptKernel]);
+
+  async function loadOlderHistory() {
+    if (!history || history.startIndex <= 0 || session?.id !== history.session.id ||
+        session.state !== "idle" || busy || historyLoading || readyOlderHistory?.source === history ||
+        olderHistoryRequest.current?.source === history) return;
+    const request = { source: history };
+    const generation = transcriptKernel.generation;
+    const epoch = turnEpochRef.current;
+    const isCurrent = () => olderHistoryRequest.current === request && committedHistory.current === history &&
+      generation === transcriptKernel.generation && epoch === turnEpochRef.current;
+    olderHistoryRequest.current = request;
+    setOlderHistoryLoading(history);
+    setOlderHistoryError(null);
+    try {
+      const page = await tauriBridgeHistory(history.session.id, history.startIndex);
+      if (!isCurrent()) return;
+      if (page.session.id !== history.session.id || page.totalMessages !== history.totalMessages ||
+          !Number.isSafeInteger(page.startIndex) || page.startIndex < 0 || page.messages.length === 0 ||
+          page.startIndex + page.messages.length !== history.startIndex) {
+        throw new Error(locale === "en" ? "History changed. Reopen the chat and try again." : "历史记录已变化，请重新打开会话后再试。");
+      }
+      const merged = {
+        ...history,
+        startIndex: page.startIndex,
+        messages: [...page.messages, ...history.messages],
+      };
+      setReadyOlderHistory({ source: history, merged, generation, epoch });
+    } catch (cause) {
+      if (isCurrent()) setOlderHistoryError({ source: history, message: tauriMessageFrom(cause) });
+    } finally {
+      if (olderHistoryRequest.current === request) {
+        olderHistoryRequest.current = null;
+        setOlderHistoryLoading(null);
+      }
+    }
+  }
+  const loadingEarlierMessages = history !== null && (olderHistoryLoading === history || readyOlderHistory?.source === history);
 
   useEffect(() => {
     let active = true;
@@ -3761,10 +3855,21 @@ export function TauriSessionPreview() {
           onTouchStartCapture={() => viewport.onTouchStartCapture()} onTouchEndCapture={viewport.onTouchEndCapture}
           onKeyDownCapture={viewport.onKeyDownCapture}>
           {session && !history && historyLoading ? <div className="tauri-loading"><span /><p>正在载入对话…</p></div> : session && !history && historyError ? <div className="tauri-loading tauri-history-error"><p>无法载入对话记录</p><p>{historyError}</p><button type="button" className="tauri-diagnostic-action" onClick={() => void refreshHistory()} disabled={busy}>重新加载</button></div> : history?.messages.length || liveText || pendingUserMessage || session?.state === "running" || session?.state === "paused" ? <div className="tauri-transcript" ref={setTranscriptElement}>
-            {history && history.startIndex > 0 && <p className="tauri-history-note">当前显示最近 {history.messages.length} 条，共 {history.totalMessages} 条可见消息</p>}
+            {history && history.startIndex > 0 && <div className="tauri-history-note">
+              <span>{locale === "en"
+                ? `Showing ${history.messages.length} of ${history.totalMessages} messages`
+                : `已加载 ${history.messages.length} 条，共 ${history.totalMessages} 条可见消息`}</span>
+              <button type="button" className="tauri-diagnostic-action" onClick={() => void loadOlderHistory()}
+                disabled={loadingEarlierMessages || historyLoading || busy || session?.state !== "idle"}>
+                {loadingEarlierMessages
+                  ? locale === "en" ? "Loading earlier messages…" : "正在加载更早消息…"
+                  : locale === "en" ? "Load earlier messages" : "加载更早消息"}
+              </button>
+              {olderHistoryError?.source === history && <span role="alert">{olderHistoryError.message}</span>}
+            </div>}
             {historyPresentation.map(item => item.kind === "message"
               ? <HistoryMessageArticle key={`message-${item.entry.index}`} entry={item.entry} sessionId={history!.session.id} finalAnswer={item.entry.message.role === "assistant"} onFork={token => void forkCurrentSession(token)} forkDisabledReason={forkUnavailableReason} questionId={item.entry.message.role === "user" ? `tauri-question-${item.entry.index}` : undefined} />
-              : item.entries.length === 0 ? <div className="tauri-progress tauri-progress--summary" key={`progress-${item.anchorIndex}-${progressMode}`}><div className="tauri-progress__summary">已完成，{formatTauriWorkDuration(item.durationMs)}</div></div>
+              : item.entries.length === 0 ? <div className="tauri-progress tauri-progress--summary" data-transcript-block-key={`progress-${item.anchorIndex}`} key={`progress-${item.anchorIndex}-${progressMode}`}><div className="tauri-progress__summary">已完成，{formatTauriWorkDuration(item.durationMs)}</div></div>
               : <details className="tauri-progress" data-transcript-block-key={`progress-${item.anchorIndex}`} key={`progress-${item.anchorIndex}-${progressMode}-${item.active}`} open={item.active || progressMode === "deep"}>
                 <summary><span>{item.active ? "正在处理" : formatTauriWorkDuration(item.durationMs) ? `已完成，${formatTauriWorkDuration(item.durationMs)}` : "过程记录"}</span><ChevronDown size={14} aria-hidden="true" /></summary>
                 <div className="tauri-progress__messages">{item.entries.map(entry => <HistoryMessageArticle key={entry.index} entry={entry} sessionId={history!.session.id} />)}</div>

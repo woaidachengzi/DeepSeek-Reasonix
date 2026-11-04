@@ -169,8 +169,9 @@ use bridge::{
     RemoteSettingsView, RenameSessionRequest, SandboxSettingsChange, SandboxSettingsView,
     SaveProviderConfigRequest, ScanImportCandidate, ScanImportSelection, SecretsSettingsChange,
     SecretsSettingsView, SessionCatalogMetadata, SessionDirectoryCursor, SessionDirectoryEntry,
-    SessionDirectoryPage, SessionFirstMessageTitle, SessionHeadSwitchRequest, SessionPreview,
-    ForkSessionRequest, SessionRequest, SkillArchiveRequest, SkillArchiveResult, SkillInstallPlan, SkillInstallRequest,
+    SessionDirectoryPage, SessionFirstMessageTitle, SessionHeadSwitchRequest, SessionHistoryRequest,
+    SessionPreview, ForkSessionRequest, SessionRequest, SkillArchiveRequest, SkillArchiveResult,
+    SkillInstallPlan, SkillInstallRequest,
     SkillInstallResult, SkillsSettingsChange, SkillsSettingsView, SubagentProfileInput,
     SubagentSettingsChange, SubagentSettingsView, SubagentTryStatusView, SubmitRequest,
     WorkspaceChangeDetailRequest, WorkspaceFileRequest, WorkspaceFileRevertCommitRequest,
@@ -823,11 +824,13 @@ fn bridge_session_balance(
 }
 
 #[tauri::command]
-fn bridge_session_history(
-    supervisor: State<'_, BridgeSupervisor>,
-    request: SessionRequest,
+async fn bridge_session_history(
+    app: tauri::AppHandle,
+    request: SessionHistoryRequest,
 ) -> Result<BridgeHistory, String> {
-    supervisor.history(request)
+    tauri::async_runtime::spawn_blocking(move || app.state::<BridgeSupervisor>().history(request))
+        .await
+        .map_err(|_| "history worker stopped; retry loading the conversation".to_string())?
 }
 
 #[tauri::command]

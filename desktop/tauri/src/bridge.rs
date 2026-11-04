@@ -89,6 +89,35 @@ pub struct SessionRequest {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SessionHistoryRequest {
+    pub session_id: String,
+    pub before_index: Option<u64>,
+}
+
+impl From<SessionRequest> for SessionHistoryRequest {
+    fn from(request: SessionRequest) -> Self {
+        Self {
+            session_id: request.session_id,
+            before_index: None,
+        }
+    }
+}
+
+impl SessionHistoryRequest {
+    fn path(&self) -> Result<String, String> {
+        let session_id = session_path_component(&self.session_id)?;
+        let path = format!("/v1/sessions/{session_id}/history");
+        match self.before_index {
+            None => Ok(path),
+            // JavaScript must represent the exclusive index exactly.
+            Some(before @ 1..=9_007_199_254_740_991) => Ok(format!("{path}?before={before}")),
+            Some(_) => Err("desktop bridge history cursor is invalid".to_string()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ForkSessionRequest {
     pub session_id: String,
     pub fork_token: String,
@@ -2716,9 +2745,9 @@ impl BridgeSupervisor {
         Ok(balance)
     }
 
-    pub fn history(&self, request: SessionRequest) -> Result<BridgeHistory, String> {
-        let session_id = session_path_component(&request.session_id)?;
-        let path = format!("/v1/sessions/{session_id}/history");
+    pub fn history(&self, request: impl Into<SessionHistoryRequest>) -> Result<BridgeHistory, String> {
+        let request = request.into();
+        let path = request.path()?;
         let envelope: BridgeHistoryResponse = self.request_json_as("GET", &path, None, None)?;
         if envelope.protocol_version != u64::from(PROTOCOL_VERSION) {
             return Err("desktop bridge protocol version is unsupported".to_string());
@@ -2727,6 +2756,9 @@ impl BridgeSupervisor {
             .map_err(|_| "desktop bridge history is too large".to_string())?;
         if envelope.start_index > envelope.total_messages
             || returned_messages > envelope.total_messages - envelope.start_index
+            || request.before_index.is_some_and(|before| {
+                returned_messages == 0 || envelope.start_index + returned_messages != before
+            })
         {
             return Err("desktop bridge history pagination is invalid".to_string());
         }
@@ -7108,6 +7140,28 @@ mod tests {
         assert_eq!(session_path_component("tab_1-abc").unwrap(), "tab_1-abc");
         assert!(session_path_component("tab/1").is_err());
         assert!(session_path_component("tab\r\nInjected: value").is_err());
+    }
+
+    #[test]
+    fn session_history_cursor_preserves_the_latest_route_and_encodes_older_pages() {
+        let latest: super::SessionHistoryRequest =
+            serde_json::from_value(json!({ "sessionId": "tab_1-abc" })).unwrap();
+        assert_eq!(latest.path().unwrap(), "/v1/sessions/tab_1-abc/history");
+
+        let older: super::SessionHistoryRequest =
+            serde_json::from_value(json!({ "sessionId": "tab_1-abc", "beforeIndex": 163 })).unwrap();
+        assert_eq!(
+            older.path().unwrap(),
+            "/v1/sessions/tab_1-abc/history?before=163"
+        );
+
+        for cursor in [0, 9_007_199_254_740_992_u64] {
+            let invalid = super::SessionHistoryRequest {
+                before_index: Some(cursor),
+                ..older.clone()
+            };
+            assert!(invalid.path().is_err());
+        }
     }
 
     #[test]

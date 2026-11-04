@@ -44,6 +44,7 @@ type SessionManager interface {
 	CancelMCPOAuth(sessionID, flowID string) error
 	ClearMCPAuthentication(sessionID, name string) (bool, error)
 	History(sessionID string) (HistoryView, error)
+	HistoryBefore(sessionID string, before int) (HistoryView, error)
 	AITrace(sessionID string, detailed bool) (json.RawMessage, error)
 	Steer(sessionID, input string) (SessionView, error)
 	Continue(ctx context.Context, sessionID string) (SessionView, error)

@@ -231,7 +231,9 @@ export const MarkdownHistory = memo(function MarkdownHistory({
           releaseDeferredCommit?.();
           releaseDeferredCommit = undefined;
           if (pendingPresentation.current === commit) pendingPresentation.current = null;
-          setParsed(next);
+          // A page can complete many worker parses together. Keep those
+          // replacements interruptible so input can run between commits.
+          startTransition(() => setParsed(next));
         };
         const scroller = fallbackMarkerRef.current?.closest<HTMLElement>(".transcript") ?? null;
         const isAtBottom = () => !scroller

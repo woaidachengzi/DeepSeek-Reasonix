@@ -208,7 +208,7 @@ type WorkspaceCodeRewindPlan struct {
 	Conflicts                    []string `json:"conflicts"`
 }
 
-// HistoryView is the latest bounded page of display-safe messages. StartIndex
+// HistoryView is a bounded page of display-safe messages. StartIndex
 // and TotalMessages refer to the projected (not raw provider) transcript.
 type HistoryView struct {
 	Session       SessionView      `json:"session"`
@@ -944,6 +944,18 @@ func (m *RuntimeManager) ClearMCPAuthentication(sessionID, name string) (bool, e
 // Runtime owns projection from its richer local model, so this package remains
 // independent of controller and provider implementation details.
 func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
+	return m.history(sessionID, 0)
+}
+
+// HistoryBefore reads the page ending at an exclusive visible row index.
+func (m *RuntimeManager) HistoryBefore(sessionID string, before int) (HistoryView, error) {
+	if before <= 0 {
+		return HistoryView{}, ErrInvalidInput
+	}
+	return m.history(sessionID, before)
+}
+
+func (m *RuntimeManager) history(sessionID string, before int) (HistoryView, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -955,20 +967,30 @@ func (m *RuntimeManager) History(sessionID string) (HistoryView, error) {
 	}
 	var messages []HistoryMessage
 	var total int
-	provider, bounded := m.runtime.(RuntimeHistoryPageProvider)
-	if bounded {
-		messages, total = provider.HistoryPage(maxHistoryMessages)
-	}
-	if !bounded || total < len(messages) || len(messages) > maxHistoryMessages {
-		// An invalid optional page must not corrupt the existing wire contract.
-		// Fall back to the established projection for legacy and faulty providers.
-		messages = m.runtime.History()
-		total = len(messages)
-		if total > maxHistoryMessages {
-			messages = messages[total-maxHistoryMessages:]
+	end := before
+	if before > 0 {
+		var err error
+		messages, total, err = historyBefore(m.runtime, before)
+		if err != nil {
+			return HistoryView{}, err
 		}
+	} else {
+		provider, bounded := m.runtime.(RuntimeHistoryPageProvider)
+		if bounded {
+			messages, total = provider.HistoryPage(maxHistoryMessages)
+		}
+		if !bounded || total < len(messages) || len(messages) > maxHistoryMessages {
+			// An invalid optional page must not corrupt the existing wire contract.
+			// Fall back to the established projection for legacy and faulty providers.
+			messages = m.runtime.History()
+			total = len(messages)
+			if total > maxHistoryMessages {
+				messages = messages[total-maxHistoryMessages:]
+			}
+		}
+		end = total
 	}
-	start := total - len(messages)
+	start := end - len(messages)
 	page := cloneHistoryMessages(messages)
 	view := m.view
 	view.State = m.runtime.State()

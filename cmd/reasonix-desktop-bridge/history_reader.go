@@ -54,15 +54,40 @@ func (c *bridgeHistoryCache) rebuild(reader bridgeHistoryReader, target agent.Se
 		return false
 	}
 	c.updateRetained(nil, true, 0)
+	return c.readChunks(reader, target, scratch, retainFrom, nil)
+}
+
+func (c *bridgeHistoryCache) readChunks(reader bridgeHistoryReader, target agent.SessionHistoryCursor, scratch []provider.Message, retainFrom int, visibleRange *bridgeHistoryRange) bool {
 	for start := 0; start < target.MessageCount(); {
 		messages, valid := reader.Chunk(target, start, scratch[:0])
 		if !valid || len(messages) == 0 {
 			return false
 		}
-		c.updateRetained(messages, false, max(0, retainFrom-start))
+		c.updateRange(messages, false, max(0, retainFrom-start), visibleRange)
 		start += len(messages)
 	}
 	return true
+}
+
+// Cold requests project only the requested display rows and do not evict the
+// runtime's hot newest page. The full scan still establishes count, turn
+// usage and prefix tokens from one coherent transcript snapshot.
+func readBridgeHistoryBefore(reader bridgeHistoryReader, before, limit int) ([]desktopbridge.HistoryMessage, int) {
+	limit = min(limit, bridgeHistoryCacheCapacity)
+	visibleRange := bridgeHistoryRange{start: max(0, before-limit), end: before}
+	scratch := make([]provider.Message, bridgeHistoryReadChunkSize)
+	defer clear(scratch)
+	var page bridgeHistoryCache
+	for range 2 {
+		target, _, _ := reader.Begin(agent.SessionHistoryCursor{})
+		page.updateRetained(nil, true, 0)
+		if page.readChunks(reader, target, scratch, 0, &visibleRange) {
+			return page.snapshot(limit)
+		}
+	}
+	messages, _, _ := reader.Delta(agent.SessionHistoryCursor{})
+	page.updateRange(messages, true, 0, &visibleRange)
+	return page.snapshot(limit)
 }
 
 func historyReadRetainFrom(reader bridgeHistoryReader, target agent.SessionHistoryCursor, scratch []provider.Message) (int, bool) {

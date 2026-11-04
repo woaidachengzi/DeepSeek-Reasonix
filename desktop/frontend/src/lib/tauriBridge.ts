@@ -1796,9 +1796,10 @@ export async function tauriBridgeSnapshot(sessionId: string): Promise<TauriBridg
   return invoke<TauriBridgeSnapshot>("bridge_session_snapshot", { request: { sessionId } });
 }
 
-export async function tauriBridgeHistory(sessionId: string): Promise<TauriBridgeHistory> {
+export async function tauriBridgeHistory(sessionId: string, beforeIndex?: number): Promise<TauriBridgeHistory> {
   requireTauri();
-  return invoke<TauriBridgeHistory>("bridge_session_history", { request: { sessionId } });
+  const request = beforeIndex === undefined ? { sessionId } : { sessionId, beforeIndex };
+  return invoke<TauriBridgeHistory>("bridge_session_history", { request });
 }
 
 export async function steerTauriBridge(sessionId: string, input: string): Promise<TauriBridgeSession> {

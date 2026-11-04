@@ -175,10 +175,9 @@ export function useTranscriptKernel({
     settleGeometry();
   }, [geometryRevision, settleGeometry]);
 
-  const beginStructural = useCallback((kind: Exclude<ScrollTransactionKind, "jump" | "selection" | "tail-sync">) => {
+  const beginStructural = useCallback((kind: Exclude<ScrollTransactionKind, "jump" | "selection" | "tail-sync">, anchor = kernel.anchor) => {
     // Structural geometry preserves the input-owned logical anchor; a new
     // bottom gap after layout cannot turn tail follow into reader intent.
-    const anchor = kernel.anchor;
     if (kind === "prepend") prependAwaitingGeometryRef.current = true;
     const transaction = kernel.begin(kind, anchor);
     refresh();

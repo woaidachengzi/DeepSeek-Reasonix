@@ -25,6 +25,10 @@ func (r *controllerRuntime) HistoryPage(limit int) ([]desktopbridge.HistoryMessa
 	return r.historyCache.page(r.controller, limit)
 }
 
+func (r *controllerRuntime) HistoryBefore(before, limit int) ([]desktopbridge.HistoryMessage, int) {
+	return readBridgeHistoryBefore(r.controller.HistoryReader(), before, limit)
+}
+
 type cachedBridgeHistoryMessage struct {
 	value        desktopbridge.HistoryMessage
 	localFailure bool
@@ -87,6 +91,14 @@ func bridgeHistoryRowVisible(message provider.Message) bool {
 // identity, total and usage only. The complete batch must be applied before a
 // snapshot is exposed, so its retained tail can replace any older cache rows.
 func (c *bridgeHistoryCache) updateRetained(messages []provider.Message, reset bool, retainFrom int) {
+	c.updateRange(messages, reset, retainFrom, nil)
+}
+
+// bridgeHistoryRange selects visible row indices for an explicit older page.
+// Its bounds are independent of raw message positions and read chunk sizes.
+type bridgeHistoryRange struct{ start, end int }
+
+func (c *bridgeHistoryCache) updateRange(messages []provider.Message, reset bool, retainFrom int, visibleRange *bridgeHistoryRange) {
 	if reset {
 		c.prefix = agent.ConversationPrefixAccumulator{}
 		clear(c.rows[:])
@@ -100,10 +112,11 @@ func (c *bridgeHistoryCache) updateRetained(messages []provider.Message, reset b
 	}
 	for index := range messages {
 		message := &messages[index]
+		skip := index < retainFrom || visibleRange != nil && (c.total < visibleRange.start || c.total >= visibleRange.end)
 		included, err := c.prefix.Append(message)
 		c.invalidTokens = c.invalidTokens || err != nil
 		if failure, ok := bridgeNoDeliverableHistory(*message); ok {
-			if index < retainFrom {
+			if skip {
 				c.total++
 				continue
 			}
@@ -126,7 +139,7 @@ func (c *bridgeHistoryCache) updateRetained(messages []provider.Message, reset b
 		if strings.TrimSpace(content) == "" {
 			continue
 		}
-		if index < retainFrom {
+		if skip {
 			c.total++
 			continue
 		}
