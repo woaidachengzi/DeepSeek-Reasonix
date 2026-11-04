@@ -533,6 +533,7 @@ var Chinese = Messages{
 	WriteEnvErr:               "写入 .env 失败：",
 
 	ProviderErrBadRequest:          "请求格式错误 (HTTP 400)：请求体被拒绝，通常是程序缺陷。若持续出现请反馈。",
+	ProviderErrRequestTooLarge:     "请求过大（HTTP 413）：本次请求超过服务端或网关的大小限制。请压缩图片、减少附件，或在新会话中重发。",
 	ProviderErrContextOverflowFmt:  "请求超出共享上下文窗口：prompt %d + 输出 %d = %d tokens，窗口只有 %d。请压缩、用更小的输出上限重试、分叉或回溯后再发送。",
 	ProviderErrAuth:                "认证失败 (HTTP 401)：未读到 API key（缺失或未设置）。请在 .env 中配置密钥，或运行 `reasonix setup`。",
 	ProviderErrAuthRejected:        "认证失败 (HTTP 401)：服务端拒绝了你的 API key。可能是 key 错误或已过期，也可能是服务端出现瞬时鉴权/额度问题——已退避重试仍失败。请稍后再试，或检查 .env 中的密钥 / 运行 `reasonix setup`。",

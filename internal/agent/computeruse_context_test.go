@@ -70,6 +70,29 @@ func TestComputerUseContextLeavesUnrelatedAndUnknownResults(t *testing.T) {
 	}
 }
 
+func TestComputerUseContextPrunesOldFramesWithImageDiagnostic(t *testing.T) {
+	msgs := desktopHistory(4)
+	diagnostic := imageUnderstandingUnavailablePrefix + "no image model. The tool already executed; its text result remains valid.]"
+	for i := 3; i < len(msgs); i += 2 {
+		msgs[i].Content += diagnostic
+	}
+	got := modelInputMessages(msgs)
+	for _, i := range []int{3, 5} {
+		result, tail, ok := strings.Cut(got[i].Content, imageUnderstandingUnavailablePrefix)
+		body, _ := computerUseResult(result)
+		if len(got[i].Images) != 0 || string(body["superseded_observation"]) != "true" ||
+			string(body["dispatched"]) != "false" || !ok || imageUnderstandingUnavailablePrefix+tail != diagnostic {
+			t.Fatalf("old result %d retained its screenshot or lost the tool outcome/diagnostic", i)
+		}
+		if len(msgs[i].Images) != 1 || !strings.HasSuffix(msgs[i].Content, diagnostic) {
+			t.Fatal("mutated the saved tool result")
+		}
+	}
+	if !reflect.DeepEqual(got[6:], msgs[6:]) {
+		t.Fatal("changed the latest two observations")
+	}
+}
+
 func TestComputerUseContextKeepsUnverifiedClickEvidenceWhenImagesAreSuperseded(t *testing.T) {
 	msgs := desktopHistory(4)
 	body, _ := computerUseResult(msgs[3].Content)
@@ -110,14 +133,19 @@ func TestComputerUseContextLocalReplay(t *testing.T) {
 	}
 	before := provider.ModelMessages(messages)
 	after := modelInputMessages(messages)
-	images := func(msgs []provider.Message) int {
-		n := 0
+	images := func(msgs []provider.Message) (count, bytes int) {
 		for _, m := range msgs {
-			n += len(m.Images)
+			count += len(m.Images)
+			for _, image := range m.Images {
+				bytes += len(image)
+			}
 		}
-		return n
+		return count, bytes
 	}
-	t.Logf("local replay: messages=%d estimated tokens=%d -> %d; images=%d -> %d", len(messages), estimateMessagesTokens(before), estimateMessagesTokens(after), images(before), images(after))
+	beforeCount, beforeBytes := images(before)
+	afterCount, afterBytes := images(after)
+	t.Logf("local replay: messages=%d estimated tokens=%d -> %d; images=%d -> %d; image reference bytes=%d -> %d",
+		len(messages), estimateMessagesTokens(before), estimateMessagesTokens(after), beforeCount, afterCount, beforeBytes, afterBytes)
 }
 
 func TestComputerUseContextBoundsDOMSnapshotsWithoutLosingLatestTabRefs(t *testing.T) {

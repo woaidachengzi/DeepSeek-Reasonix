@@ -506,6 +506,7 @@ var ChineseTraditional = Messages{
 	WriteEnvErr:               "寫入 .env 失敗：",
 
 	ProviderErrBadRequest:          "請求格式錯誤 (HTTP 400)：請求體被拒絕，通常是程式缺陷。若持續出現請回報。",
+	ProviderErrRequestTooLarge:     "請求過大（HTTP 413）：本次請求超過伺服器或閘道的大小限制。請壓縮圖片、減少附件，或在新對話中重新傳送。",
 	ProviderErrContextOverflowFmt:  "請求超出共用上下文視窗：prompt %d + 輸出 %d = %d tokens，視窗只有 %d。請壓縮、用更小的輸出上限重試、分叉或回溯後再發送。",
 	ProviderErrAuth:                "認證失敗 (HTTP 401)：未讀到 API key（缺失或未設定）。請在 .env 中設定金鑰，或執行 `reasonix setup`。",
 	ProviderErrModelFormatMismatch: "模型/API 格式不相容：服務端不支援目前模型使用所選 provider 線路。這不是 API key 失效；請選擇支援該模型的 provider 線路。",

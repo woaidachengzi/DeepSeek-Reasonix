@@ -28,7 +28,10 @@ func computerUseContext(msgs []provider.Message) []provider.Message {
 		if m.Role != provider.RoleTool || (m.Name != "computer_use" && !ids[m.ToolCallID]) {
 			continue
 		}
-		body, prefix := computerUseResult(m.Content)
+		// Image processing can append a diagnostic after the complete tool
+		// JSON. Keep that diagnostic while compacting the observation itself.
+		result, diagnostic, hasDiagnostic := strings.Cut(m.Content, imageUnderstandingUnavailablePrefix)
+		body, prefix := computerUseResult(result)
 		if body == nil || body["state"] == nil {
 			continue
 		}
@@ -59,6 +62,9 @@ func computerUseContext(msgs []provider.Message) []provider.Message {
 			out = append([]provider.Message(nil), msgs...)
 		}
 		out[i].Content = prefix + string(encoded)
+		if hasDiagnostic {
+			out[i].Content += imageUnderstandingUnavailablePrefix + diagnostic
+		}
 		out[i].Images = nil
 	}
 	if out != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -165,7 +166,16 @@ func modelFormatMismatchReason(reason string) bool {
 // without it those errors are undiagnosable from the category line alone.
 func apiErrorReason(e *provider.APIError) string {
 	details := make([]string, 0, 3)
-	if reason := providerBodyReason(e.Body); reason != "" {
+	body := e.Body
+	if e.Status == http.StatusRequestEntityTooLarge {
+		// The localized 413 already explains a generic gateway error page.
+		// Keep structured limits and trace IDs for providers that return them.
+		prefix := strings.ToLower(strings.TrimSpace(body))
+		if strings.HasPrefix(prefix, "<html") || strings.HasPrefix(prefix, "<!doctype html") {
+			body = ""
+		}
+	}
+	if reason := providerBodyReason(body); reason != "" {
 		details = append(details, reason)
 	}
 	if traceID := strings.TrimSpace(e.TraceID); traceID != "" {

@@ -8,6 +8,8 @@ import (
 	"reasonix/internal/provider"
 )
 
+const imageUnderstandingUnavailablePrefix = "\n[Image understanding unavailable: "
+
 type agentImageInput struct {
 	service *imageinput.Service
 	native  bool
@@ -34,7 +36,7 @@ func (a *Agent) processToolImages(ctx context.Context, text string, images []str
 	}
 	summary, err := a.imageInput.service.Understand(ctx, a.modelRef, images, a.Session().Snapshot, a.svc.sink)
 	if err != nil {
-		return imageResult{text: text + fmt.Sprintf("\n[Image understanding unavailable: %v. The tool already executed; its text result remains valid. Do not claim to have seen the image or repeat the original action to retry image understanding.]", err), diagnostic: err}
+		return imageResult{text: text + imageUnderstandingUnavailablePrefix + fmt.Sprintf("%v. The tool already executed; its text result remains valid. Do not claim to have seen the image or repeat the original action to retry image understanding.]", err), diagnostic: err}
 	}
 	return imageResult{text: imageinput.AppendSummary(text, summary), summary: summary}
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -224,6 +225,32 @@ func TestExplainRecoveryWaitExhaustedKeepsTypeAndCause(t *testing.T) {
 	connect := explainError(&provider.RecoveryWaitExhaustedError{Phase: "connect", Waited: 10 * time.Minute, Attempts: 12, Cause: io.ErrUnexpectedEOF})
 	if !strings.Contains(connect.Error(), fmt.Sprintf(i18n.M.ProviderErrWaitExhaustedFmt, "10m0s")) || !strings.Contains(connect.Error(), io.ErrUnexpectedEOF.Error()) {
 		t.Errorf("connect explanation = %q", connect.Error())
+	}
+}
+
+func TestExplainRequestTooLarge(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, reason string
+	}{
+		{"openresty page", "  <HTML><head><title>413 Request Entity Too Large</title></head><body>openresty</body></HTML>", ""},
+		{"doctype page", "<!DOCTYPE html><html>413</html>", ""},
+		{"structured reason", `{"error":{"message":"Maximum request size is 1 MiB"}}`, "Maximum request size is 1 MiB"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cause := &provider.APIError{
+				Provider: "deepseek", Protocol: "openai", Status: http.StatusRequestEntityTooLarge,
+				Body: tc.body, TraceID: "size-limit-123",
+			}
+			err := explainError(cause)
+			for _, want := range []string{i18n.M.ProviderErrRequestTooLarge, "Trace ID: size-limit-123", tc.reason} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error %q should include %q", err, want)
+				}
+			}
+			if strings.Contains(err.Error(), "<") || !errors.Is(err, cause) || provider.DiagnoseFailure(err).Status != http.StatusRequestEntityTooLarge {
+				t.Fatalf("expected readable 413 with original diagnostic cause, got %v", err)
+			}
+		})
 	}
 }
 

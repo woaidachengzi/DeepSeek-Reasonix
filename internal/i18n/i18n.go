@@ -572,6 +572,7 @@ type Messages struct {
 
 	// provider HTTP error explanations — actionable, reason + fix per status code
 	ProviderErrBadRequest          string // 400
+	ProviderErrRequestTooLarge     string // 413 — HTTP body limit, not a token count
 	ProviderErrContextOverflowFmt  string // 400/413/422 shared-window overflow with numbers
 	ProviderErrAuth                string // 401 — no key configured / sent
 	ProviderErrAuthRejected        string // 401 — a key was sent but the server rejected it
@@ -666,6 +667,8 @@ func (m Messages) ProviderStatusMessage(status int) string {
 		return m.ProviderErrInsufficientBalance
 	case 404:
 		return m.ProviderErrNotFound
+	case 413:
+		return m.ProviderErrRequestTooLarge
 	case 422:
 		return m.ProviderErrUnprocessable
 	case 429:
